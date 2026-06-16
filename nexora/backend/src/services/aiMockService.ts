@@ -16,6 +16,22 @@ export const analyzeProfile = async () => {
       { threshold: 80, label: 'Internship Ready' },
       { threshold: 90, label: 'Industry Ready' },
       { threshold: 100, label: 'Dream Role Ready' }
+    ],
+    techPulse: {
+      now: ['React', 'TypeScript', 'Node.js'],
+      later: ['AWS', 'Docker', 'Kubernetes'],
+      ignore: ['PHP', 'jQuery', 'SVN']
+    },
+    roadmap: [
+      { label: 'Current Stage', value: 'Junior Developer', color: 'var(--color-primary)' },
+      { label: 'Next Skill Milestone', value: 'System Design Baselines', color: 'var(--color-warning)' },
+      { label: 'Next Career Stage', value: 'Mid-Level Full Stack Engineer', color: 'var(--color-success)' },
+      { label: 'Long-Term Goal', value: 'Lead System Architect', color: 'var(--color-success)' }
+    ],
+    insights: [
+      'Your strongest skill is React.',
+      'Learning AWS can increase your readiness by 8%.',
+      'System Design is currently trending for your target role.'
     ]
   };
 };

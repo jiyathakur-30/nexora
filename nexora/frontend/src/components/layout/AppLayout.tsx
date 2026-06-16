@@ -2,7 +2,6 @@ import React from 'react';
 import { NavLink, Outlet } from 'react-router-dom';
 import { LayoutDashboard, Target, Users, Settings, MessageCircle } from 'lucide-react';
 import FloatingMentor from './FloatingMentor';
-import Button from '../ui/Button';
 
 const Sidebar: React.FC = () => {
   return (
@@ -50,25 +49,11 @@ const SidebarLink: React.FC<{ to: string; icon: React.ReactNode; label: string }
 };
 
 export const AppLayout: React.FC = () => {
-  const isAnalyzed = localStorage.getItem('nexora_is_analyzed') === 'true';
-  const location = window.location.pathname;
-  
-  // Protect advanced routes
-  const requiresAnalysis = ['/career-twin', '/mentor', '/opportunity-hub'].includes(location);
-
   return (
     <div style={{ display: 'flex', minHeight: '100vh', backgroundColor: 'var(--color-background)' }}>
       <Sidebar />
       <div style={{ flex: 1, marginLeft: '240px', position: 'relative' }}>
-        {requiresAnalysis && !isAnalyzed ? (
-          <div className="flex-center" style={{ height: '100vh', flexDirection: 'column', gap: 'var(--space-4)' }}>
-            <h2 style={{ fontSize: '2rem', fontWeight: 800 }}>Profile Analysis Required</h2>
-            <p style={{ color: 'var(--color-text-light)', fontSize: '1.2rem' }}>Please complete your Career Twin profile on the dashboard first.</p>
-            <Button onClick={() => window.location.href = '/dashboard'}>Go to Dashboard</Button>
-          </div>
-        ) : (
-          <Outlet />
-        )}
+        <Outlet />
       </div>
       <FloatingMentor />
     </div>

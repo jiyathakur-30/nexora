@@ -1,17 +1,21 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Settings as SettingsIcon, LogOut, RefreshCw, X, Moon, Sun } from 'lucide-react';
+import { Settings as SettingsIcon, LogOut, RefreshCw, X, Moon, Sun, Code, Briefcase, FileText, Loader2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import Card from '../components/ui/Card';
 import Button from '../components/ui/Button';
 
+import { useCareerAgent } from '../services/CareerAgent';
+import { generateMissions } from '../services/MissionGenerator';
+
 const Settings: React.FC = () => {
   const navigate = useNavigate();
+  const { memory, updateMemory, resetAgentMemory } = useCareerAgent();
   
-  // State from localStorage
-  const [userName, setUserName] = useState(localStorage.getItem('nexora_user_name') || 'Guest');
-  const [targetRole, setTargetRole] = useState(localStorage.getItem('nexora_user_role') || 'Software Engineer');
-  const email = localStorage.getItem('nexora_user_email') || userName.toLowerCase().replace(' ', '.') + '@example.com';
+  // State variables synchronized with memory
+  const userName = memory.profile?.name || 'Guest';
+  const targetRole = memory.targetRole || 'Software Engineer';
+  const email = memory.profile?.email || 'you@example.com';
   const [experience, setExperience] = useState('Entry Level (0-2 YOE)');
   
   const [theme, setTheme] = useState(localStorage.getItem('nexora-theme') || 'light');
@@ -24,6 +28,30 @@ const Settings: React.FC = () => {
   const [editName, setEditName] = useState(userName);
   const [editRole, setEditRole] = useState(targetRole);
   const [editExp, setEditExp] = useState(experience);
+
+  // Connected Sources States
+  const [githubVal, setGithubVal] = useState(memory.githubUsername || '');
+  const [linkedinVal, setLinkedinVal] = useState(memory.linkedinUrl || '');
+  const [isEditingGithub, setIsEditingGithub] = useState(false);
+  const [isEditingLinkedin, setIsEditingLinkedin] = useState(false);
+  const [isReanalyzing, setIsReanalyzing] = useState(false);
+  const [progress, setProgress] = useState(0);
+
+  const resumeInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (!isEditingGithub) setGithubVal(memory.githubUsername || '');
+  }, [memory.githubUsername, isEditingGithub]);
+
+  useEffect(() => {
+    if (!isEditingLinkedin) setLinkedinVal(memory.linkedinUrl || '');
+  }, [memory.linkedinUrl, isEditingLinkedin]);
+
+  // Sync form states with memory changes
+  useEffect(() => {
+    setEditName(userName);
+    setEditRole(targetRole);
+  }, [userName, targetRole]);
 
   useEffect(() => {
     if (theme === 'dark') {
@@ -38,12 +66,12 @@ const Settings: React.FC = () => {
     localStorage.removeItem('nexora_user_name');
     localStorage.removeItem('nexora_user_email');
     localStorage.removeItem('nexora_user_role');
-    localStorage.removeItem('nexora_is_analyzed');
+    localStorage.removeItem('nexora_agent_memory');
     navigate('/login');
   };
 
   const executeReset = () => {
-    localStorage.setItem('nexora_is_analyzed', 'false');
+    resetAgentMemory();
     navigate('/dashboard');
   };
 
@@ -51,12 +79,161 @@ const Settings: React.FC = () => {
     e.preventDefault();
     localStorage.setItem('nexora_user_name', editName);
     localStorage.setItem('nexora_user_role', editRole);
-    setUserName(editName);
-    setTargetRole(editRole);
+    updateMemory(prev => ({
+      ...prev,
+      profile: prev.profile ? { ...prev.profile, name: editName } : { name: editName, email: '' },
+      targetRole: editRole
+    }));
     setExperience(editExp);
     setIsEditModalOpen(false);
-    window.dispatchEvent(new Event("storage"));
   };
+
+  const runSettingsReanalysis = (actionLogLabel: string, updatedMemoryFields: Partial<typeof memory>) => {
+    setIsReanalyzing(true);
+    setProgress(0);
+    
+    updateMemory(prev => {
+      const makeId = () => Math.random().toString(36).substr(2, 9);
+      return {
+        ...prev,
+        ...updatedMemoryFields,
+        activities: [
+          ...prev.activities,
+          { id: makeId(), label: actionLogLabel, timestamp: new Date().toISOString() }
+        ]
+      };
+    });
+
+    const stepDuration = 30;
+    const progressInterval = setInterval(() => {
+      setProgress(p => {
+        if (p >= 95) {
+          clearInterval(progressInterval);
+          return 95;
+        }
+        return p + 5;
+      });
+    }, stepDuration);
+
+    fetch('http://localhost:5000/api/analyze', { method: 'POST' })
+      .then(res => res.json())
+      .then(data => {
+        setProgress(100);
+        setTimeout(() => {
+          setIsReanalyzing(false);
+          updateMemory(prev => {
+            const makeId = () => Math.random().toString(36).substr(2, 9);
+            const newActivities = [
+              ...prev.activities,
+              { id: makeId(), label: 'Profile Reanalyzed', timestamp: new Date().toISOString() },
+              { id: makeId(), label: 'Career Twin Refreshed', timestamp: new Date().toISOString() }
+            ];
+
+            const mentorGreeting = {
+              text: `I've successfully updated your Profile Analysis! Since you updated your profile connections in Settings (${actionLogLabel}), I've re-calibrated your Career Twin, readiness scores, and custom weekly goals. Let me know what you'd like to focus on today.`,
+              isAi: true,
+              timestamp: new Date().toISOString()
+            };
+
+            const chatHistory = [...(prev.mentorContext?.chatHistory || []), mentorGreeting];
+
+            const hasResume = prev.hasResume;
+            const hasGithub = !!prev.githubUsername;
+            const hasLinkedin = !!prev.linkedinUrl;
+            const isAnalyzed = hasResume || hasGithub || hasLinkedin;
+
+            const tempMem = {
+              ...prev,
+              isAnalyzed,
+              isTwinGenerated: isAnalyzed,
+              analysis: isAnalyzed ? data : null,
+              mentorContext: {
+                ...prev.mentorContext,
+                chatHistory
+              },
+              weeklyMissions: [],
+              suggestedMissions: [],
+              activities: newActivities
+            };
+
+            const active = isAnalyzed ? generateMissions(tempMem, 3) : [];
+            const suggestions = isAnalyzed ? generateMissions({ ...tempMem, weeklyMissions: active }, 5) : [];
+
+            return {
+              ...tempMem,
+              weeklyMissions: active,
+              suggestedMissions: suggestions
+            };
+          });
+        }, 200);
+      })
+      .catch(err => {
+        console.error(err);
+        setIsReanalyzing(false);
+        alert("Re-analysis failed. Please check backend connection on port 5000.");
+      });
+  };
+
+  const handleDisconnectGithub = () => {
+    runSettingsReanalysis('GitHub Disconnected', { githubUsername: '' });
+  };
+
+  const handleDisconnectLinkedin = () => {
+    runSettingsReanalysis('LinkedIn Disconnected', { linkedinUrl: '' });
+  };
+
+  const handleRemoveResume = () => {
+    runSettingsReanalysis('Resume Removed', { hasResume: false, resumeFileName: '' });
+  };
+
+  const handleSaveGithub = () => {
+    if (!githubVal.trim()) return;
+    runSettingsReanalysis(
+      memory.githubUsername ? 'GitHub Updated' : 'GitHub Connected', 
+      { githubUsername: githubVal.trim() }
+    );
+    setIsEditingGithub(false);
+  };
+
+  const handleSaveLinkedin = () => {
+    if (!linkedinVal.trim()) return;
+    runSettingsReanalysis(
+      memory.linkedinUrl ? 'LinkedIn Updated' : 'LinkedIn Connected', 
+      { linkedinUrl: linkedinVal.trim() }
+    );
+    setIsEditingLinkedin(false);
+  };
+
+  const handleResumeFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files.length > 0) {
+      const file = e.target.files[0];
+      runSettingsReanalysis(
+        memory.hasResume ? 'Resume Replaced' : 'Resume Connected',
+        { hasResume: true, resumeFileName: file.name }
+      );
+    }
+  };
+
+  const hasResume = memory.hasResume;
+  const hasGithub = !!memory.githubUsername;
+  const hasLinkedin = !!memory.linkedinUrl;
+
+  const completeness = (hasResume ? 40 : 0) + (hasGithub ? 30 : 0) + (hasLinkedin ? 30 : 0);
+
+  let qualityIndicator = 'No Connected Sources';
+  let qualityColor = 'var(--color-text-light)';
+  if (completeness > 0) {
+    if (completeness <= 40) {
+      qualityIndicator = 'Basic Analysis';
+      qualityColor = 'var(--color-warning)';
+    } else if (completeness < 100) {
+      qualityIndicator = 'Enhanced Analysis';
+      qualityColor = 'var(--color-primary)';
+    } else {
+      qualityIndicator = 'Complete Analysis';
+      qualityColor = 'var(--color-success)';
+    }
+  }
 
   return (
     <div className="container page-enter-active" style={{ paddingTop: 'var(--space-8)', paddingBottom: 'var(--space-12)', maxWidth: 800 }}>
@@ -99,6 +276,136 @@ const Settings: React.FC = () => {
                 {experience}
               </div>
             </div>
+          </div>
+        </Card>
+
+        {/* Connected Sources Section */}
+        <Card hoverEffect>
+          <h3 style={{ fontSize: '1.4rem', fontWeight: 700, marginBottom: 'var(--space-2)' }}>Connected Sources</h3>
+          <p style={{ color: 'var(--color-text-light)', marginBottom: 'var(--space-6)' }}>Manage the data feeds that power your AI Career Twin.</p>
+
+          {/* Completeness & Quality indicator banner */}
+          <div style={{ padding: 'var(--space-4)', backgroundColor: 'var(--color-background)', borderRadius: 'var(--radius-md)', border: '1px solid rgba(61,44,46,0.05)', marginBottom: 'var(--space-6)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px' }}>
+            <div>
+              <div style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--color-text-light)', textTransform: 'uppercase', marginBottom: '4px' }}>Profile Completeness</div>
+              <div style={{ fontSize: '1.8rem', fontWeight: 800, color: 'var(--color-primary)' }}>{completeness}%</div>
+            </div>
+            <div style={{ textAlign: 'right' }}>
+              <div style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--color-text-light)', textTransform: 'uppercase', marginBottom: '4px' }}>Analysis Quality</div>
+              <div style={{ fontSize: '1.2rem', fontWeight: 700, color: qualityColor }}>{qualityIndicator}</div>
+            </div>
+            <div style={{ width: '100%', height: 6, background: 'rgba(61,44,46,0.05)', borderRadius: 3, overflow: 'hidden', marginTop: '4px' }}>
+              <div style={{ height: '100%', background: 'var(--color-primary)', width: `${completeness}%`, transition: 'width 0.3s ease' }}></div>
+            </div>
+          </div>
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
+            
+            {/* Resume Source */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', padding: 'var(--space-4)', backgroundColor: 'var(--color-background)', borderRadius: 'var(--radius-md)', border: '1px solid rgba(61,44,46,0.05)' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '8px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                  <FileText size={20} color="var(--color-primary)" />
+                  <div>
+                    <h4 style={{ fontSize: '1.1rem', fontWeight: 700, margin: 0 }}>Resume</h4>
+                    <p style={{ fontSize: '0.85rem', color: 'var(--color-text-light)', margin: 0 }}>Skills, education, projects</p>
+                  </div>
+                </div>
+                <div>
+                  {hasResume ? (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <span style={{ fontSize: '0.85rem', color: 'var(--color-success)', fontWeight: 600 }}>✓ Connected</span>
+                      <Button variant="secondary" size="sm" onClick={() => alert(`Viewing connected resume: ${memory.resumeFileName || 'resume.pdf'}`)}>View</Button>
+                      <Button variant="secondary" size="sm" onClick={() => resumeInputRef.current?.click()}>Replace</Button>
+                      <Button variant="secondary" size="sm" onClick={handleRemoveResume} style={{ color: 'var(--color-danger)' }}>Remove</Button>
+                    </div>
+                  ) : (
+                    <Button variant="outline" size="sm" onClick={() => resumeInputRef.current?.click()}>Upload Resume</Button>
+                  )}
+                  <input type="file" ref={resumeInputRef} onChange={handleResumeFileChange} style={{ display: 'none' }} accept=".pdf,.doc,.docx" />
+                </div>
+              </div>
+              {hasResume && (
+                <div style={{ fontSize: '0.8rem', color: 'var(--color-text-light)', borderTop: '1px dashed rgba(61,44,46,0.08)', paddingTop: '6px', fontStyle: 'italic' }}>
+                  Current file: {memory.resumeFileName || 'resume.pdf'}
+                </div>
+              )}
+            </div>
+
+            {/* GitHub Source */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', padding: 'var(--space-4)', backgroundColor: 'var(--color-background)', borderRadius: 'var(--radius-md)', border: '1px solid rgba(61,44,46,0.05)' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '8px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                  <Code size={20} color="var(--color-primary)" />
+                  <div>
+                    <h4 style={{ fontSize: '1.1rem', fontWeight: 700, margin: 0 }}>GitHub</h4>
+                    <p style={{ fontSize: '0.85rem', color: 'var(--color-text-light)', margin: 0 }}>Technical activity, repositories, coding trends</p>
+                  </div>
+                </div>
+                <div>
+                  {hasGithub && !isEditingGithub ? (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <span style={{ fontSize: '0.85rem', color: 'var(--color-success)', fontWeight: 600 }}>✓ Connected ({memory.githubUsername})</span>
+                      <Button variant="secondary" size="sm" onClick={() => setIsEditingGithub(true)}>Edit</Button>
+                      <Button variant="secondary" size="sm" onClick={handleDisconnectGithub} style={{ color: 'var(--color-danger)' }}>Disconnect</Button>
+                    </div>
+                  ) : !hasGithub && !isEditingGithub ? (
+                    <Button variant="outline" size="sm" onClick={() => setIsEditingGithub(true)}>Connect GitHub</Button>
+                  ) : null}
+                </div>
+              </div>
+              {isEditingGithub && (
+                <div style={{ display: 'flex', gap: '8px', marginTop: '4px' }}>
+                  <input 
+                    type="text" 
+                    placeholder="GitHub Username" 
+                    value={githubVal} 
+                    onChange={e => setGithubVal(e.target.value)} 
+                    style={{ flex: 1, padding: '8px 12px', borderRadius: 'var(--radius-sm)', border: '1px solid rgba(61,44,46,0.15)', fontSize: '0.85rem', background: 'var(--color-background)', color: 'var(--color-text)' }} 
+                  />
+                  <Button size="sm" onClick={handleSaveGithub}>Save</Button>
+                  <Button variant="ghost" size="sm" onClick={() => { setIsEditingGithub(false); setGithubVal(memory.githubUsername || ''); }}>Cancel</Button>
+                </div>
+              )}
+            </div>
+
+            {/* LinkedIn Source */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', padding: 'var(--space-4)', backgroundColor: 'var(--color-background)', borderRadius: 'var(--radius-md)', border: '1px solid rgba(61,44,46,0.05)' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '8px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                  <Briefcase size={20} color="#0A66C2" />
+                  <div>
+                    <h4 style={{ fontSize: '1.1rem', fontWeight: 700, margin: 0 }}>LinkedIn</h4>
+                    <p style={{ fontSize: '0.85rem', color: 'var(--color-text-light)', margin: 0 }}>Professional profile, experience, networking</p>
+                  </div>
+                </div>
+                <div>
+                  {hasLinkedin && !isEditingLinkedin ? (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <span style={{ fontSize: '0.85rem', color: 'var(--color-success)', fontWeight: 600 }}>✓ Connected</span>
+                      <Button variant="secondary" size="sm" onClick={() => setIsEditingLinkedin(true)}>Edit</Button>
+                      <Button variant="secondary" size="sm" onClick={handleDisconnectLinkedin} style={{ color: 'var(--color-danger)' }}>Disconnect</Button>
+                    </div>
+                  ) : !hasLinkedin && !isEditingLinkedin ? (
+                    <Button variant="outline" size="sm" onClick={() => setIsEditingLinkedin(true)}>Connect LinkedIn</Button>
+                  ) : null}
+                </div>
+              </div>
+              {isEditingLinkedin && (
+                <div style={{ display: 'flex', gap: '8px', marginTop: '4px' }}>
+                  <input 
+                    type="url" 
+                    placeholder="LinkedIn Profile URL" 
+                    value={linkedinVal} 
+                    onChange={e => setLinkedinVal(e.target.value)} 
+                    style={{ flex: 1, padding: '8px 12px', borderRadius: 'var(--radius-sm)', border: '1px solid rgba(61,44,46,0.15)', fontSize: '0.85rem', background: 'var(--color-background)', color: 'var(--color-text)' }} 
+                  />
+                  <Button size="sm" onClick={handleSaveLinkedin}>Save</Button>
+                  <Button variant="ghost" size="sm" onClick={() => { setIsEditingLinkedin(false); setLinkedinVal(memory.linkedinUrl || ''); }}>Cancel</Button>
+                </div>
+              )}
+            </div>
+
           </div>
         </Card>
 
@@ -241,6 +548,25 @@ const Settings: React.FC = () => {
                 </div>
               </div>
             </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Reanalysis Progress Overlay */}
+      <AnimatePresence>
+        {isReanalyzing && (
+          <motion.div 
+            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(8px)', zIndex: 99999, display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', color: '#fff' }}
+          >
+            <motion.div animate={{ rotate: 360 }} transition={{ repeat: Infinity, duration: 1, ease: 'linear' }} style={{ marginBottom: 16 }}>
+              <Loader2 size={48} color="var(--color-primary)" />
+            </motion.div>
+            <h3 style={{ fontSize: '1.4rem', fontWeight: 700, marginBottom: '8px' }}>AI Coach is Re-analyzing...</h3>
+            <p style={{ color: 'rgba(255,255,255,0.7)', fontSize: '1rem', margin: '0 0 16px 0' }}>Updating twin profile and learning modules</p>
+            <div style={{ width: 240, height: 6, background: 'rgba(255,255,255,0.2)', borderRadius: 3, overflow: 'hidden' }}>
+              <div style={{ height: '100%', background: 'var(--color-primary)', width: `${progress}%`, transition: 'width 0.1s linear' }} />
+            </div>
           </motion.div>
         )}
       </AnimatePresence>

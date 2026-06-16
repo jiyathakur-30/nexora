@@ -24,6 +24,7 @@ const Login: React.FC = () => {
     localStorage.setItem('nexora_user_email', email);
     localStorage.setItem('nexora_user_role', role);
     localStorage.setItem('nexora_is_analyzed', 'false'); // Set to false initially
+    localStorage.removeItem('nexora_agent_memory'); // Clear old agent memory for a fresh start
     
     navigate('/dashboard');
   };
