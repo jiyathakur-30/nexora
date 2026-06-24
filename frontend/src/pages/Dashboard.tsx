@@ -6,6 +6,7 @@ import Button from '../components/ui/Button';
 import { useCareerAgent } from '../services/CareerAgent';
 import type { WeeklyMission } from '../services/CareerAgent';
 import { generateMissions, checkMissionRelevance, regenerateSingleMission, generateId } from '../services/MissionGenerator';
+import { normalizeAnalysis } from './CareerTwin';
 
 const Dashboard: React.FC = () => {
   const {
@@ -77,16 +78,13 @@ const Dashboard: React.FC = () => {
   console.log("=====================================");
 
   const dynamicProfile = analysis ? {
-    ...analysis,
-    readiness:
-  analysis.alignmentScore ??
-  analysis.readiness ??
-  0,
-    strengths: analysis.strengths || [],
-    gaps: analysis.gaps || [],
-    currentSkills: analysis.currentSkills || [],
-    futureSkills: analysis.futureSkills || [],
-  } : null;
+  ...analysis,
+  readiness: analysis.readiness ?? analysis.alignmentScore ?? 0,
+  strengths: analysis.strengths || [],
+  gaps: analysis.gaps ||  [],
+  currentSkills: analysis.currentSkills || analysis.strengths || [],
+  futureSkills: analysis.futureSkills || analysis.gaps || [],
+} : null;
 
   // Background fetch to heal memory if data is missing but analysis is complete
   // useEffect(() => {
@@ -556,34 +554,94 @@ updateMemory(prev => ({
     }, (stepDuration * analysisSteps.length) / 66);
   };
 
-  const handleAnalyze = () => {
-    if (!github && !linkedin && !resumeUploaded) return;
-    
-    updateMemory(prev => ({
-      ...prev,
-      githubUsername: github.trim() || prev.githubUsername,
-      linkedinUrl: linkedin.trim() || prev.linkedinUrl,
-    }));
+ const handleAnalyze = () => {
+  if (!github && !linkedin && !resumeUploaded) return;
 
+  updateMemory(prev => ({
+    ...prev,
+    githubUsername: github.trim() || prev.githubUsername,
+    linkedinUrl: linkedin.trim() || prev.linkedinUrl,
+  }));
+
+  // If resume already uploaded and analyzed, just mark profile as enriched
+  if (resumeUploaded && memory.analysis) {
+    updateMemory(prev => ({ ...prev, isAnalyzed: true }));
+    return;
+  }
+
+  // For GitHub/LinkedIn-only flow (no PDF), trigger mock analysis as fallback
+  if (!resumeUploaded) {
     runProfileAnalysis();
-  };
+  }
+};
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files.length > 0) {
-      const file = e.target.files[0];
-      setResumeUploaded(true);
-      updateMemory(prev => ({
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  if (!e.target.files || e.target.files.length === 0) return;
+  const file = e.target.files[0];
+
+  setResumeUploaded(true);
+  setIsAnalyzing(true);
+  setAnalysisText('Uploading resume...');
+  setProgress(10);
+
+  try {
+    const formData = new FormData();
+    formData.append('resume', file);
+    formData.append('targetRole', memory.targetRole || 'Software Engineer');
+
+    setAnalysisText('Extracting resume content...');
+    setProgress(30);
+
+    const res = await fetch('http://localhost:5000/api/upload-resume', {
+      method: 'POST',
+      body: formData,
+    });
+
+    setProgress(60);
+    setAnalysisText('Analyzing with Gemini AI...');
+
+    if (!res.ok) {
+      const err = await res.json();
+      throw new Error(err.error || 'Upload failed');
+    }
+
+    const { fileName, analysis: rawAnalysis } = await res.json();
+
+    setProgress(90);
+    setAnalysisText('Building Career Twin...');
+
+    // Normalize Gemini response to match frontend field expectations
+    const normalizedAnalysis = normalizeAnalysis(rawAnalysis, memory.targetRole);
+
+    updateMemory(prev => {
+      const tempMem = {
         ...prev,
         hasResume: true,
-        resumeFileName: file.name,
-        analysis: null, // Reset analysis so they are prompted to run it
+        resumeFileName: fileName || file.name,
+        isAnalyzed: true,
+        isTwinGenerated: true,
+        analysis: normalizedAnalysis,
         activities: [
           ...prev.activities,
-          { id: Math.random().toString(36).substr(2, 9), label: 'Resume Profile Connected', timestamp: new Date().toISOString() }
+          { id: Math.random().toString(36).substr(2, 9), label: 'Resume Uploaded & Analyzed', timestamp: new Date().toISOString() },
+          { id: Math.random().toString(36).substr(2, 9), label: 'Career Twin Generated', timestamp: new Date().toISOString() },
         ]
-      }));
-    }
-  };
+      };
+      const active = generateMissions(tempMem, 3);
+      const suggestions = generateMissions({ ...tempMem, weeklyMissions: active }, 5);
+      return { ...tempMem, weeklyMissions: active, suggestedMissions: suggestions };
+    });
+
+    setProgress(100);
+  } catch (err: any) {
+    console.error('Resume upload error:', err);
+    alert(`Resume analysis failed: ${err.message || 'Please ensure the backend is running on port 5000.'}`);
+    setResumeUploaded(false);
+  } finally {
+    setIsAnalyzing(false);
+    setProgress(0);
+  }
+};
 
   const handleConnectLinkedin = () => {
     const val = linkedinInput.trim();

@@ -7,6 +7,41 @@ import Button from '../components/ui/Button';
 import { useCareerAgent } from '../services/CareerAgent';
 import { generateMissions } from '../services/MissionGenerator';
 
+// Normalize Gemini API response to match the frontend's expected AnalysisResults shape
+export function normalizeAnalysis(raw: any, targetRole: string) {
+  const gaps = raw.gaps || raw.missingSkills || [];
+  const insights = raw.insights || raw.recommendations || [];
+  const strengths = raw.strengths || [];
+  const readiness = raw.readiness ?? raw.alignmentScore ?? 0;
+
+  return {
+    readiness,
+    alignmentScore: readiness, // alias so both references work
+    strengths,
+    gaps,
+    currentSkills: raw.currentSkills || strengths,
+    futureSkills: raw.futureSkills || gaps.slice(0, 3),
+    insights,
+    recommendations: insights, // alias
+    milestones: raw.milestones || [
+      { threshold: 80, label: 'Intern Ready' },
+      { threshold: 90, label: 'Industry Ready' },
+      { threshold: 100, label: 'Dream Role Ready' },
+    ],
+    techPulse: raw.techPulse || {
+      now: strengths.slice(0, 3),
+      later: gaps.slice(0, 3),
+      ignore: [],
+    },
+    roadmap: raw.roadmap || [
+      { label: 'Current Stage', value: targetRole, color: 'var(--color-primary)' },
+      { label: 'Next Skill Milestone', value: gaps[0] || 'Core Skills', color: 'var(--color-warning)' },
+      { label: 'Next Career Stage', value: `Senior ${targetRole}`, color: 'var(--color-success)' },
+      { label: 'Long-Term Goal', value: `Lead ${targetRole}`, color: 'var(--color-success)' },
+    ],
+  };
+}
+
 const SIMULATION_RULES: Record<string, { impact: number, time: string, demand: string, skills: string[], desc: string }> = {
   'aws': { impact: 8, time: '4 Weeks', demand: 'High', skills: ['AWS', 'Cloud Infrastructure', 'Deployment'], desc: 'Cloud expertise directly increases your hireability for modern infrastructure roles.' },
   'docker': { impact: 6, time: '2 Weeks', demand: 'High', skills: ['Docker', 'Containerization'], desc: 'Containerization is a foundational requirement for most backend and full-stack positions.' },
@@ -117,6 +152,10 @@ const ProfileCompletenessCard: React.FC<ProfileCompletenessCardProps> = ({ memor
       .then(data => {
         console.log("CAREERTWIN API RESPONSE");
         console.log(data);
+        const normalized = normalizeAnalysis(
+  data,
+  memory.targetRole
+);
         setProgress(100);
         setTimeout(() => {
           setIsReanalyzing(false);
@@ -140,7 +179,7 @@ const ProfileCompletenessCard: React.FC<ProfileCompletenessCardProps> = ({ memor
               ...prev,
               isAnalyzed: true,
               isTwinGenerated: true,
-              analysis: data,
+              analysis:normalized, 
               mentorContext: {
                 ...prev.mentorContext,
                 chatHistory
@@ -766,5 +805,6 @@ const CareerTwin: React.FC = () => {
     </div>
   );
 };
+
 
 export default CareerTwin;
