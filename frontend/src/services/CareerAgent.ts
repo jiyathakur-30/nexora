@@ -340,3 +340,49 @@ export const useCareerAgent = () => {
     resetAgentMemory
   };
 };
+
+// =============================================================================
+// ANALYSIS NORMALIZER
+// Shared utility that maps Gemini API response fields to the frontend's
+// expected AnalysisResults shape. Exported here so Dashboard.tsx,
+// CareerTwin.tsx, and Settings.tsx can all import from one place.
+//
+// Gemini returns:  { readiness, strengths, missingSkills, recommendations }
+// Frontend needs:  { readiness, alignmentScore, strengths, gaps, insights,
+//                    currentSkills, futureSkills, techPulse, roadmap, milestones }
+//
+// Fields not returned by Gemini are synthesized from strengths/gaps so the UI
+// never renders empty sections.
+// =============================================================================
+export function normalizeAnalysis(raw: any, targetRole: string): AnalysisResults {
+  const gaps: string[]     = raw.gaps || raw.missingSkills || [];
+  const insights: string[] = raw.insights || raw.recommendations || [];
+  const strengths: string[] = raw.strengths || [];
+  const readiness: number   = raw.readiness ?? raw.alignmentScore ?? 0;
+
+  return {
+    readiness,
+    alignmentScore: readiness,           // alias so legacy references work
+    strengths,
+    gaps,
+    currentSkills:  raw.currentSkills  || strengths,
+    futureSkills:   raw.futureSkills   || gaps.slice(0, 3),
+    insights,
+    milestones: raw.milestones || [
+      { threshold: 80,  label: 'Intern Ready'   },
+      { threshold: 90,  label: 'Industry Ready' },
+      { threshold: 100, label: 'Dream Role'     },
+    ],
+    techPulse: raw.techPulse || {
+      now:    strengths.slice(0, 3),
+      later:  gaps.slice(0, 3),
+      ignore: [],
+    },
+    roadmap: raw.roadmap || [
+      { label: 'Current Stage',      value: targetRole,                  color: 'var(--color-primary)' },
+      { label: 'Next Milestone',     value: gaps[0] || 'Core Skills',    color: 'var(--color-warning)' },
+      { label: 'Next Career Stage',  value: `Senior ${targetRole}`,      color: 'var(--color-success)' },
+      { label: 'Long-Term Goal',     value: `Lead ${targetRole}`,        color: 'var(--color-success)' },
+    ],
+  };
+}
