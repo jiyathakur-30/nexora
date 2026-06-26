@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Target, Code, Briefcase, FileText, Check, Map, Lightbulb, Edit2, Trash2, Plus, RefreshCw, Pin, ExternalLink, CheckCircle, X, HelpCircle, Award } from 'lucide-react';
 import Card from '../components/ui/Card';
@@ -7,12 +8,21 @@ import { useCareerAgent } from '../services/CareerAgent';
 import type { WeeklyMission } from '../services/CareerAgent';
 import { generateMissions, checkMissionRelevance, regenerateSingleMission, generateId } from '../services/MissionGenerator';
 import { normalizeAnalysis } from './CareerTwin';
+import { 
+  DashboardHeader, 
+  KPISection, 
+  CareerRoadmap, 
+  AICoachCard, 
+  ResumeInsights, 
+  SkillsSummary 
+} from '../components/dashboard/DashboardComponents';
 
 const Dashboard: React.FC = () => {
   const {
     memory,
     updateMemory
   } = useCareerAgent();
+  const navigate = useNavigate();
 
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [analysisText, setAnalysisText] = useState('');
@@ -611,12 +621,21 @@ updateMemory(prev => ({
     setProgress(60);
     setAnalysisText('Analyzing with Gemini AI...');
 
+    let responseData: any;
+    try {
+      responseData = await res.json();
+    } catch (parseErr) {
+      const errorText = await res.text().catch(() => '');
+      throw new Error(`Server returned status ${res.status}: ${errorText || 'Invalid response'}`);
+    }
     if (!res.ok) {
-      const err = await res.json();
-      throw new Error(err.error || 'Upload failed');
+      throw new Error(responseData?.error || responseData?.message || `Server error (Status ${res.status})`);
     }
 
-    const { fileName, analysis: rawAnalysis } = await res.json();
+
+
+
+    const { fileName, analysis: rawAnalysis } = responseData;
 
     setProgress(90);
     setAnalysisText('Building Career Twin...');
@@ -662,7 +681,11 @@ updateMemory(prev => {
     setProgress(100);
   } catch (err: any) {
     console.error('Resume upload error:', err);
-    alert(`Resume analysis failed: ${err.message || 'Please ensure the backend is running on port 5000.'}`);
+    let userMsg = err.message || 'Please ensure the backend is running on port 5000.';
+    if (userMsg.includes('Failed to fetch')) {
+      userMsg = 'Connection refused. Please check if the backend server is running on http://localhost:5000.';
+    }
+    alert(`Resume analysis failed: ${userMsg}`);
     setResumeUploaded(false);
   } finally {
     setIsAnalyzing(false);
@@ -781,1019 +804,359 @@ updateMemory(prev => {
 
   return (
     <div className="container page-enter-active" style={{ paddingTop: 'var(--space-6)', paddingBottom: 'var(--space-8)' }}>
-      <header style={{ marginBottom: 'var(--space-5)' }}>
-        <h1 style={{ fontSize: '2.2rem', color: 'var(--color-text)', marginBottom: 'var(--space-1)' }}>Hello {firstName} 👋</h1>
-        <p style={{ fontSize: '1.05rem', color: 'var(--color-text-light)' }}>Welcome to your Career Intelligence Dashboard for <strong style={{ color: 'var(--color-primary)' }}>{targetRole}</strong>.</p>
-      </header>
+      {/* Hidden file input for header CTA action */}
+      <input 
+        type="file" 
+        ref={fileInputRef} 
+        onChange={handleFileChange} 
+        style={{ display: 'none' }} 
+        accept=".pdf,.doc,.docx" 
+      />
 
-      {/* Profile Enrichment Cards */}
-      {(!githubConnected || !linkedinConnected) && (
-        <div style={{ display: 'grid', gridTemplateColumns: !githubConnected && !linkedinConnected ? '1fr 1fr' : '1fr', gap: 'var(--space-4)', marginBottom: 'var(--space-6)' }}>
-          {!githubConnected && (
-            <Card hoverEffect style={{ padding: 'var(--space-6)', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', border: '1px solid rgba(201,106,74,0.15)', background: 'var(--color-card)' }}>
-              <div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '12px' }}>
-                  <div style={{ width: 36, height: 36, borderRadius: '50%', backgroundColor: 'rgba(201,106,74,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--color-primary)' }}>
-                    <Code size={20} />
-                  </div>
-                  <h3 style={{ fontSize: '1.2rem', fontWeight: 700, margin: 0 }}>Connect GitHub</h3>
-                </div>
-                <p style={{ fontSize: '0.9rem', color: 'var(--color-text-light)', marginBottom: '16px', lineHeight: '1.4' }}>
-                  GitHub contributes <strong>technical activity, repositories, and coding trends</strong>.
-                </p>
-                <div style={{ marginBottom: '16px' }}>
-                  <div style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--color-text-light)', textTransform: 'uppercase', marginBottom: '8px' }}>Unlocks:</div>
-                  <ul style={{ margin: 0, paddingLeft: '20px', fontSize: '0.85rem', color: 'var(--color-text-light)', display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                    <li>Repository analysis</li>
-                    <li>Coding activity insights</li>
-                    <li>Technical skill detection</li>
-                  </ul>
-                </div>
-              </div>
-              <div style={{ display: 'flex', gap: '8px', marginTop: 'auto' }}>
-                <input 
-                  type="text" 
-                  placeholder="GitHub Username" 
-                  value={githubInput} 
-                  onChange={e => setGithubInput(e.target.value)} 
-                  style={{ flex: 1, padding: '8px 12px', borderRadius: 'var(--radius-sm)', border: '1px solid rgba(61,44,46,0.15)', fontSize: '0.85rem', background: 'var(--color-background)', color: 'var(--color-text)' }} 
-                />
-                <Button size="sm" onClick={handleConnectGithub}>Connect GitHub</Button>
-              </div>
-            </Card>
-          )}
+      {/* 1. Header (Welcome and context) */}
+      <DashboardHeader 
+        targetRole={targetRole} 
+        userName={userName} 
+        hasResume={memory.hasResume}
+        onAction={() => fileInputRef.current?.click()}
+      />
 
-          {!linkedinConnected && (
-            <Card hoverEffect style={{ padding: 'var(--space-6)', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', border: '1px solid rgba(201,106,74,0.15)', background: 'var(--color-card)' }}>
-              <div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '12px' }}>
-                  <div style={{ width: 36, height: 36, borderRadius: '50%', backgroundColor: 'rgba(10,102,194,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#0A66C2' }}>
-                    <Briefcase size={20} color="#0A66C2" />
-                  </div>
-                  <h3 style={{ fontSize: '1.2rem', fontWeight: 700, margin: 0 }}>Connect LinkedIn</h3>
-                </div>
-                <p style={{ fontSize: '0.9rem', color: 'var(--color-text-light)', marginBottom: '16px', lineHeight: '1.4' }}>
-                  LinkedIn contributes <strong>professional profile, experience, and networking</strong>.
-                </p>
-                <div style={{ marginBottom: '16px' }}>
-                  <div style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--color-text-light)', textTransform: 'uppercase', marginBottom: '8px' }}>Unlocks:</div>
-                  <ul style={{ margin: 0, paddingLeft: '20px', fontSize: '0.85rem', color: 'var(--color-text-light)', display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                    <li>Professional profile analysis</li>
-                    <li>Industry insights</li>
-                    <li>Networking recommendations</li>
-                  </ul>
-                </div>
-              </div>
-              <div style={{ display: 'flex', gap: '8px', marginTop: 'auto' }}>
-                <input 
-                  type="url" 
-                  placeholder="LinkedIn Profile URL" 
-                  value={linkedinInput} 
-                  onChange={e => setLinkedinInput(e.target.value)} 
-                  style={{ flex: 1, padding: '8px 12px', borderRadius: 'var(--radius-sm)', border: '1px solid rgba(61,44,46,0.15)', fontSize: '0.85rem', background: 'var(--color-background)', color: 'var(--color-text)' }} 
-                />
-                <Button size="sm" onClick={handleConnectLinkedin}>Connect LinkedIn</Button>
-              </div>
-            </Card>
-          )}
-        </div>
-      )}
+      {/* 2. KPI Section */}
+      <KPISection analysis={analysis} hasResume={memory.hasResume} />
 
-      {/* Balanced 2-Column Layout */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-6)' }}>
+      {/* 3. Signature Career Roadmap Hero */}
+      <CareerRoadmap 
+        analysis={analysis} 
+        targetRole={targetRole} 
+        onOpenTwin={() => navigate('/career-twin')} 
+      />
+
+      {/* 4. Asymmetric split grid */}
+      <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 'var(--space-5)', alignItems: 'stretch' }}>
         
-        {/* Left Column */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-6)' }}>
-          {/* Career Readiness */}
-          <motion.div initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.1 }}>
-            <Card hoverEffect>
-              <h3 style={{ fontSize: '1.1rem', marginBottom: 'var(--space-4)', color: 'var(--color-text-light)' }}>Career Readiness</h3>
-              <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px' }}>
-                <div style={{ fontSize: '3.5rem', fontWeight: 800, color: 'var(--color-primary)', lineHeight: 1 }}>
-                {analysis ? `${analysis.careerReadiness ?? analysis.alignmentScore ?? analysis.readiness}%` : '--'}
-                </div>
-              </div>
-              <div style={{ marginTop: 'var(--space-4)', height: 8, background: 'rgba(61,44,46,0.05)', borderRadius: 4, overflow: 'hidden' }}>
-                <motion.div initial={{ width: 0 }} animate={{ width: analysis ? `${analysis.careerReadiness ?? analysis.alignmentScore ?? analysis.readiness}%` : '0%' }}transition={{ duration: 1, delay: 0.5 }} style={{ height: '100%', background: 'var(--color-primary)' }} />
-              </div>
-
-              <div style={{ marginTop: 'var(--space-4)', borderTop: '1px solid rgba(61,44,46,0.1)', paddingTop: 'var(--space-3)' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                  <Target size={18} color="var(--color-text-light)" />
-                  <div>
-                    <div style={{ fontSize: '0.8rem', color: 'var(--color-text-light)', textTransform: 'uppercase', fontWeight: 700 }}>Target Role</div>
-                    <div style={{ fontSize: '0.95rem', fontWeight: 600 }}>{targetRole}</div>
-                  </div>
-                </div>
-              </div>
-            </Card>
-          </motion.div>
-
-          {/* 1. Internship Readiness Score */}
-          <motion.div initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.15 }}>
-            <Card hoverEffect>
-              <h3 style={{ fontSize: '1.1rem', marginBottom: 'var(--space-4)', color: 'var(--color-text-light)' }}>Internship Readiness</h3>
-              <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px' }}>
-                <div style={{ fontSize: '3.5rem', fontWeight: 800, color: 'var(--color-success)', lineHeight: 1 }}>
-                 {analysis ? `${analysis.internshipReadiness ?? analysis.readiness}%` : '--'}
-                </div>
-              </div>
-              <div style={{ marginTop: 'var(--space-6)', height: 8, background: 'rgba(61,44,46,0.05)', borderRadius: 4, overflow: 'hidden' }}>
-                <motion.div 
-                  initial={{ width: 0 }} 
-                 animate={{ width: analysis ? `${analysis.internshipReadiness ?? analysis.readiness}%` : '0%' }}
-                  transition={{ duration: 1, delay: 0.6 }} 
-                  style={{ height: '100%', background: 'var(--color-success)' }} 
-                />
-              </div>
-              <p style={{ marginTop: 'var(--space-4)', fontSize: '0.9rem', color: 'var(--color-text-light)', lineHeight: 1.5 }}>
-                {analysis 
-                  ? "Readiness for entry-level opportunities based on current profile and skill coverage."
-                  : "Upload resume to calculate internship readiness."}
-              </p>
-            </Card>
-          </motion.div>
-
-          {/* 2. Learning Heatmap */}
-          <motion.div initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.2 }}>
-            <Card hoverEffect>
-              <h3 style={{ fontSize: '1.1rem', fontWeight: 700, marginBottom: 'var(--space-6)', color: 'var(--color-text-light)' }}>Learning Heatmap</h3>
-              {analysis ? (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
-                  {getSkillHeatmapData().map((skill) => (
-                    <div key={skill.name} style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.9rem', fontWeight: 600 }}>
-                        <span>{skill.name}</span>
-                        <span style={{ color: skill.color }}>{skill.value}%</span>
-                      </div>
-                      <div style={{ height: 10, background: 'rgba(61,44,46,0.05)', borderRadius: 5, overflow: 'hidden', position: 'relative' }}>
-                        <motion.div 
-                          initial={{ width: 0 }} 
-                          animate={{ width: `${skill.value}%` }} 
-                          transition={{ duration: 0.8, ease: "easeOut" }} 
-                          style={{ height: '100%', background: skill.color, borderRadius: 5 }} 
-                        />
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              ) : memory.hasResume ? (
-                <div style={{ 
-                  padding: 'var(--space-6) 0', 
-                  textAlign: 'center', 
-                  display: 'flex', 
-                  flexDirection: 'column', 
-                  alignItems: 'center', 
-                  justifyContent: 'center',
-                  gap: 'var(--space-4)' 
-                }}>
-                  <p style={{ color: 'var(--color-text)', fontSize: '0.95rem', fontWeight: 600, margin: 0 }}>
-                    Resume Connected
-                  </p>
-                  <p style={{ color: 'var(--color-text-light)', fontSize: '0.85rem', margin: 0 }}>
-                    Please run profile analysis to extract skills and calculate readiness scores.
-                  </p>
-                  <Button size="sm" onClick={runProfileAnalysis} style={{ fontSize: '0.85rem' }}>
-                    Run Profile Analysis
-                  </Button>
-                </div>
-              ) : (
-                <div style={{ 
-                  padding: 'var(--space-6) 0', 
-                  textAlign: 'center', 
-                  display: 'flex', 
-                  flexDirection: 'column', 
-                  alignItems: 'center', 
-                  justifyContent: 'center',
-                  gap: 'var(--space-4)' 
-                }}>
-                  <p style={{ color: 'var(--color-text-light)', fontSize: '0.95rem', margin: 0 }}>
-                    No skill analysis available yet.
-                  </p>
-                  <Button size="sm" onClick={() => fileInputRef.current?.click()} style={{ fontSize: '0.85rem' }}>
-                    Upload Resume
-                  </Button>
-                </div>
-              )}
-            </Card>
-          </motion.div>
-
-          {/* 2. Personalized Progression Timeline */}
-          <motion.div initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.25 }}>
-            <Card hoverEffect>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 'var(--space-6)' }}>
-                <Map size={20} color="var(--color-text-light)" />
-                <h3 style={{ fontSize: '1.2rem', fontWeight: 700 }}>Personalized Progression</h3>
-              </div>
-              
-              {analysis ? (
-                <div style={{ position: 'relative', paddingLeft: 28 }}>
-                  {/* Timeline vertical bar */}
-                  <div style={{ position: 'absolute', top: 8, bottom: 8, left: 7, width: 2, background: 'rgba(61,44,46,0.1)' }}></div>
-                  
-                  {analysis.roadmap?.map((step: any, idx: number) => (
-                    <div key={idx} style={{ position: 'relative', marginBottom: (analysis.roadmap && idx !== analysis.roadmap.length - 1) ? 'var(--space-5)' : 0 }}>
-                      {/* Node dot */}
-                      <div style={{ 
-                          position: 'absolute', 
-                          top: 4, 
-                          left: -26, 
-                          width: 16, 
-                          height: 16, 
-                          borderRadius: '50%', 
-                          background: step.completed ? 'var(--color-success)' : step.color, 
-                          border: '3px solid var(--color-card)',
-                          boxShadow: 'var(--shadow-sm)',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          color: 'white',
-                          fontSize: '8px',
-                          fontWeight: 700
-                      }}>
-                        {step.completed && '✓'}
-                      </div>
-                      <div style={{ 
-                        fontSize: '0.8rem', 
-                        fontWeight: 700, 
-                        color: step.completed ? 'var(--color-success)' : 'var(--color-text-light)', 
-                        textTransform: 'uppercase', 
-                        marginBottom: 2,
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: 4
-                      }}>
-                        {step.label} {step.completed && '(Achieved)'}
-                      </div>
-                      <div style={{ 
-                        fontSize: '1rem', 
-                        fontWeight: 600, 
-                        color: 'var(--color-text)',
-                        textDecoration: step.completed ? 'line-through' : 'none',
-                        opacity: step.completed ? 0.75 : 1
-                      }}>
-                        {step.value}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <div style={{ padding: 'var(--space-4) 0', textAlign: 'center' }}>
-                  <p style={{ color: 'var(--color-text-light)', fontSize: '0.95rem', margin: 0 }}>
-                    Generate your Career Twin to create a personalized roadmap.
-                  </p>
-                </div>
-              )}
-            </Card>
-          </motion.div>
+        {/* Left column (2/3 width) */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-5)' }}>
+          {/* AI Coach Card */}
+          <AICoachCard 
+            weeklyMissions={memory.weeklyMissions || []}
+            targetRole={targetRole}
+            onComplete={(mission) => {
+              setCompletingMission(mission);
+              setEvidenceUrl('');
+            }}
+            onSkip={(mission) => {
+              setSkippingMission(mission);
+              setIsConfirmSkipModalOpen(true);
+            }}
+            onAddCustom={() => setIsCreatingMission(true)}
+          />
         </div>
 
-        {/* Right Column */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-6)' }}>
-          
-          {/* 3. AI Insight Card */}
-          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }}>
-            <Card hoverEffect style={{ background: 'linear-gradient(to bottom right, var(--color-card), rgba(201,106,74,0.03))', border: '1px solid var(--color-glass-border)' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 'var(--space-4)' }}>
-                <Lightbulb color="#D49F00" size={24} />
-                <h3 style={{ fontSize: '1.2rem', fontWeight: 700 }}>AI Career Insights</h3>
-              </div>
-              {analysis ? (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
-                  {analysis.insights?.map((insight, idx) => (
-                    <div key={idx} style={{ display: 'flex', gap: 10, alignItems: 'center', padding: '8px 10px', background: 'var(--color-background)', borderRadius: 'var(--radius-sm)' }}>
-                      <span style={{ color: 'var(--color-success)', fontWeight: 700, fontSize: '1rem', flexShrink: 0 }}>✓</span>
-                      <span style={{ fontSize: '0.9rem', fontWeight: 600, color: 'var(--color-text)', lineHeight: 1.3 }}>{insight}</span>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <div style={{ padding: 'var(--space-4) 0', display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                  <p style={{ color: 'var(--color-text-light)', fontSize: '0.95rem', margin: 0 }}>
-                    Upload your profile to receive AI-powered insights.
-                  </p>
-                  <div style={{ display: 'flex', gap: 8 }}>
-                    <input 
-                      type="url" 
-                      placeholder="LinkedIn URL" 
-                      value={linkedinInput} 
-                      onChange={e => setLinkedinInput(e.target.value)} 
-                      style={{ flex: 1, padding: '8px 12px', borderRadius: 'var(--radius-sm)', border: '1px solid rgba(61,44,46,0.1)', fontSize: '0.9rem' }} 
-                    />
-                    <Button size="sm" onClick={handleConnectLinkedin}>Connect</Button>
-                  </div>
-                </div>
-              )}
-            </Card>
-          </motion.div>
+        {/* Right column (1/3 width) */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-5)' }}>
+          {/* Resume Insights Diagnostics */}
+          <ResumeInsights 
+            analysis={analysis}
+            hasResume={memory.hasResume}
+            onOpenTwin={() => navigate('/career-twin')}
+          />
 
-          {/* Core Strengths & Critical Gaps */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-6)' }}>
-            <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.35 }}>
-              <Card hoverEffect style={{ height: '100%' }}>
-                <h3 style={{ fontSize: '1.1rem', marginBottom: 'var(--space-4)', color: 'var(--color-success)' }}>Core Strengths</h3>
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
-                  {analysis && dynamicProfile?.strengths ? (
-                    dynamicProfile.strengths.map((s: string) => <span key={s} style={{ padding: '6px 12px', borderRadius: '8px', fontSize: '0.9rem', fontWeight: 500, backgroundColor: 'rgba(78, 139, 98, 0.1)', color: 'var(--color-success)', border: '1px solid rgba(78, 139, 98, 0.2)' }}>{s}</span>)
-                  ) : (
-                    <span style={{ fontSize: '0.9rem', color: 'var(--color-text-light)' }}>No strengths analyzed yet.</span>
-                  )}
-                </div>
-              </Card>
-            </motion.div>
-            
-            <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.4 }}>
-              <Card hoverEffect style={{ height: '100%' }}>
-                <h3 style={{ fontSize: '1.1rem', marginBottom: 'var(--space-4)', color: 'var(--color-danger)' }}>Critical Gaps</h3>
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
-                  {analysis && dynamicProfile?.gaps ? (
-                    dynamicProfile.gaps.map((s: string) => <span key={s} style={{ padding: '6px 12px', borderRadius: '8px', fontSize: '0.9rem', fontWeight: 500, backgroundColor: 'rgba(192, 86, 86, 0.1)', color: 'var(--color-danger)', border: '1px solid rgba(192, 86, 86, 0.2)' }}>{s}</span>)
-                  ) : (
-                    <span style={{ fontSize: '0.9rem', color: 'var(--color-text-light)' }}>No skill gaps analyzed yet.</span>
-                  )}
-                </div>
-              </Card>
-            </motion.div>
-          </div>
-
-          {/* Weekly AI Mission (User-Controlled Mission System) */}
-          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.45 }}>
-            <Card hoverEffect>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--space-4)' }}>
-                <div>
-                  <h3 style={{ fontSize: '1.2rem', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <Target size={20} color="var(--color-primary)" />
-                    Personalized AI Missions & Career Coaching
-                  </h3>
-                  <p style={{ fontSize: '0.9rem', color: 'var(--color-text-light)', margin: '4px 0 0 0' }}>
-                    Adaptive goals based on your target role of <strong>{targetRole}</strong>.
-                  </p>
-                </div>
-                {analysis && memory.weeklyMissions && memory.weeklyMissions.length > 0 && (
-                  <span style={{ 
-                    fontSize: '0.85rem', 
-                    fontWeight: 700, 
-                    color: 'var(--color-success)', 
-                    backgroundColor: 'rgba(78, 139, 98, 0.1)', 
-                    padding: '4px 10px', 
-                    borderRadius: 20 
-                  }}>
-                    {memory.weeklyMissions.filter(t => t.completed).length} Active
-                  </span>
-                )}
-              </div>
-              
-              {analysis ? (
-                <>
-                  {/* ACTIVE MISSIONS SECTION */}
-                  <div style={{ marginBottom: 'var(--space-6)' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--space-3)' }}>
-                      <h4 style={{ fontSize: '1rem', fontWeight: 600, color: 'var(--color-text)' }}>
-                        Active Targets ({memory.weeklyMissions.length}/3)
-                      </h4>
-                      {!isCreatingMission && memory.weeklyMissions.length < 3 && (
-                        <Button size="sm" variant="outline" onClick={() => setIsCreatingMission(true)} style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                          <Plus size={14} /> Custom Mission
-                        </Button>
-                      )}
-                    </div>
-
-                    {/* Progress Bar */}
-                    <div style={{ height: 6, background: 'rgba(61,44,46,0.05)', borderRadius: 3, overflow: 'hidden', marginBottom: 'var(--space-4)' }}>
-                      <motion.div 
-                        animate={{ width: `${Math.round((memory.weeklyMissions.filter(t => t.completed).length / (memory.weeklyMissions.length || 3)) * 100)}%` }} 
-                        transition={{ duration: 0.3 }} 
-                        style={{ height: '100%', background: 'var(--color-primary)' }} 
-                      />
-                    </div>
-
-                    {/* Inline Custom Mission Creator Panel */}
-                    {isCreatingMission && (
-                      <motion.form 
-                        initial={{ opacity: 0, height: 0 }} 
-                        animate={{ opacity: 1, height: 'auto' }} 
-                        exit={{ opacity: 0, height: 0 }}
-                        onSubmit={handleCreateCustomMission} 
-                        style={{ 
-                          padding: '16px', 
-                          background: 'var(--color-background)', 
-                          borderRadius: 'var(--radius-md)', 
-                          border: '1px solid rgba(61,44,46,0.1)', 
-                          marginBottom: 'var(--space-4)',
-                          display: 'flex',
-                          flexDirection: 'column',
-                          gap: 12
-                        }}
-                      >
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                          <span style={{ fontSize: '0.9rem', fontWeight: 700 }}>New Custom Mission</span>
-                          <button type="button" onClick={() => setIsCreatingMission(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--color-text-light)' }}>
-                            <X size={16} />
-                          </button>
-                        </div>
-                        <input 
-                          type="text" 
-                          placeholder="What is your goal? (e.g., Learn SQL joins, Complete Kaggle notebook)" 
-                          value={customText}
-                          onChange={e => setCustomText(e.target.value)}
-                          required
-                          style={{ width: '100%', padding: '8px 12px', borderRadius: 'var(--radius-sm)', border: '1px solid rgba(61,44,46,0.15)', fontSize: '0.9rem' }}
-                        />
-                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8 }}>
-                          <div>
-                            <label style={{ fontSize: '0.75rem', fontWeight: 700, textTransform: 'uppercase', color: 'var(--color-text-light)' }}>Category</label>
-                            <select 
-                              value={customCategory} 
-                              onChange={e => setCustomCategory(e.target.value as any)}
-                              style={{ width: '100%', padding: '6px', borderRadius: 'var(--radius-sm)', border: '1px solid rgba(61,44,46,0.15)', fontSize: '0.85rem' }}
-                            >
-                              <option value="Learning">Learning</option>
-                              <option value="Project">Project</option>
-                              <option value="Internship">Internship</option>
-                              <option value="Networking">Networking</option>
-                              <option value="Certification">Certification</option>
-                              <option value="Interview Preparation">Interview Prep</option>
-                            </select>
-                          </div>
-                          <div>
-                            <label style={{ fontSize: '0.75rem', fontWeight: 700, textTransform: 'uppercase', color: 'var(--color-text-light)' }}>Difficulty</label>
-                            <select 
-                              value={customDifficulty} 
-                              onChange={e => setCustomDifficulty(e.target.value as any)}
-                              style={{ width: '100%', padding: '6px', borderRadius: 'var(--radius-sm)', border: '1px solid rgba(61,44,46,0.15)', fontSize: '0.85rem' }}
-                            >
-                              <option value="Beginner">Beginner</option>
-                              <option value="Intermediate">Intermediate</option>
-                              <option value="Advanced">Advanced</option>
-                            </select>
-                          </div>
-                          <div>
-                            <label style={{ fontSize: '0.75rem', fontWeight: 700, textTransform: 'uppercase', color: 'var(--color-text-light)' }}>Topic / Skill</label>
-                            <input 
-                              type="text" 
-                              placeholder="e.g. SQL" 
-                              value={customSkill} 
-                              onChange={e => setCustomSkill(e.target.value)}
-                              style={{ width: '100%', padding: '6px', borderRadius: 'var(--radius-sm)', border: '1px solid rgba(61,44,46,0.15)', fontSize: '0.85rem' }}
-                            />
-                          </div>
-                        </div>
-                        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
-                          <Button size="sm" variant="outline" type="button" onClick={() => setIsCreatingMission(false)}>Cancel</Button>
-                          <Button size="sm" type="submit">Add to Active</Button>
-                        </div>
-                      </motion.form>
-                    )}
-
-                    {/* Active Mission List */}
-                    {memory.weeklyMissions.length > 0 ? (
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
-                        {memory.weeklyMissions.map(task => (
-                          <div 
-                            key={task.id} 
-                            style={{ 
-                              display: 'flex', 
-                              flexDirection: 'column',
-                              gap: 6,
-                              padding: '12px 16px', 
-                              background: 'var(--color-background)', 
-                              borderRadius: 'var(--radius-sm)', 
-                              border: '1px solid rgba(61,44,46,0.06)',
-                              transition: 'all 0.2s',
-                              position: 'relative'
-                            }}
-                          >
-                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
-                              <div style={{ display: 'flex', alignItems: 'center', gap: 12, flex: 1 }}>
-                                {/* Completion Checkbox */}
-                                <div 
-                                  onClick={() => setCompletingMission(task)}
-                                  style={{ 
-                                    width: 20, 
-                                    height: 20, 
-                                    borderRadius: 4, 
-                                    border: '2px solid var(--color-text-light)',
-                                    backgroundColor: 'transparent',
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    justifyContent: 'center',
-                                    cursor: 'pointer',
-                                    transition: 'all 0.2s',
-                                    color: 'var(--color-success)'
-                                  }}
-                                  onMouseOver={e => e.currentTarget.style.borderColor = 'var(--color-success)'}
-                                  onMouseOut={e => e.currentTarget.style.borderColor = 'var(--color-text-light)'}
-                                >
-                                  {task.completed && '✓'}
-                                </div>
-
-                                {editingMission?.id === task.id ? (
-                                  <form onSubmit={handleEditMission} style={{ display: 'flex', gap: 6, flex: 1 }}>
-                                    <input 
-                                      type="text" 
-                                      value={editText} 
-                                      onChange={e => setEditText(e.target.value)}
-                                      style={{ flex: 1, padding: '4px 8px', borderRadius: 4, border: '1px solid var(--color-primary)', fontSize: '0.95rem' }}
-                                      autoFocus
-                                    />
-                                    <Button size="sm" type="submit">Save</Button>
-                                    <Button size="sm" variant="outline" onClick={() => setEditingMission(null)}>Cancel</Button>
-                                  </form>
-                                ) : (
-                                  <span style={{ 
-                                    fontSize: '0.95rem', 
-                                    fontWeight: 600, 
-                                    color: 'var(--color-text)'
-                                  }}>
-                                    {task.text}
-                                  </span>
-                                )}
-                              </div>
-
-                              {/* Control Action Buttons */}
-                              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                                <button 
-                                  onClick={() => handleTogglePin(task.id)} 
-                                  title={task.pinned ? "Unpin mission" : "Pin mission"}
-                                  style={{ background: 'none', border: 'none', cursor: 'pointer', color: task.pinned ? 'var(--color-primary)' : 'rgba(61,44,46,0.3)', padding: 4 }}
-                                >
-                                  <Pin size={15} style={{ transform: task.pinned ? 'rotate(45deg)' : 'none' }} />
-                                </button>
-                                <button 
-                                  onClick={() => { setEditingMission(task); setEditText(task.text); }} 
-                                  title="Edit mission text"
-                                  style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'rgba(61,44,46,0.5)', padding: 4 }}
-                                >
-                                  <Edit2 size={14} />
-                                </button>
-                                {task.source === 'AI Generated' && (
-                                  <button 
-                                    onClick={() => { setSkippingMission(task); setIsConfirmSkipModalOpen(true); }} 
-                                    title="Regenerate/Replace mission"
-                                    style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'rgba(61,44,46,0.5)', padding: 4 }}
-                                  >
-                                    <RefreshCw size={14} />
-                                  </button>
-                                )}
-                                <button 
-                                  onClick={() => handleDeleteMission(task.id)} 
-                                  title="Delete mission"
-                                  style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--color-danger)', opacity: 0.7, padding: 4 }}
-                                >
-                                  <Trash2 size={14} />
-                                </button>
-                              </div>
-                            </div>
-
-                            {/* Metadata Badges */}
-                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 4, alignItems: 'center' }}>
-                              <span style={{ 
-                                fontSize: '0.75rem', 
-                                fontWeight: 700, 
-                                padding: '2px 8px', 
-                                borderRadius: 4,
-                                backgroundColor: task.difficulty === 'Advanced' ? 'rgba(192, 86, 86, 0.1)' : (task.difficulty === 'Intermediate' ? 'rgba(230, 162, 60, 0.1)' : 'rgba(64, 158, 255, 0.1)'),
-                                color: task.difficulty === 'Advanced' ? 'var(--color-danger)' : (task.difficulty === 'Intermediate' ? 'var(--color-warning)' : 'var(--color-primary)')
-                              }}>
-                                {task.difficulty}
-                              </span>
-                              <span style={{ fontSize: '0.75rem', fontWeight: 600, padding: '2px 8px', borderRadius: 4, backgroundColor: 'rgba(61,44,46,0.06)', color: 'var(--color-text-light)' }}>
-                                {task.category}
-                              </span>
-                              <span style={{ fontSize: '0.75rem', fontWeight: 600, padding: '2px 8px', borderRadius: 4, backgroundColor: 'rgba(201,106,74,0.08)', color: 'var(--color-primary)' }}>
-                                {task.source}
-                              </span>
-                              {task.skill && (
-                                <span style={{ fontSize: '0.72rem', fontWeight: 500, color: 'var(--color-text-light)' }}>
-                                  Topic: {task.skill}
-                                </span>
-                              )}
-                            </div>
-
-                            {/* Reasoning Text */}
-                            <p style={{ fontSize: '0.82rem', color: 'var(--color-text-light)', margin: '4px 0 0 0', display: 'flex', alignItems: 'center', gap: 4 }}>
-                              <Lightbulb size={12} color="var(--color-primary)" />
-                              <strong>Why:</strong> {task.why}
-                            </p>
-
-                            {/* Replaced why explanation if any */}
-                            {task.replacedWhy && (
-                              <p style={{ fontSize: '0.78rem', color: 'var(--color-warning)', margin: '2px 0 0 0', fontStyle: 'italic' }}>
-                                {task.replacedWhy}
-                              </p>
-                            )}
-                          </div>
-                        ))}
-                      </div>
-                    ) : (
-                      <div style={{ padding: 'var(--space-4) 0', textAlign: 'center', border: '1px dashed rgba(61,44,46,0.1)', borderRadius: 'var(--radius-md)' }}>
-                        <p style={{ color: 'var(--color-text-light)', fontSize: '0.9rem', margin: 0 }}>
-                          No active targets. Promote a suggestion below or create a custom mission!
-                        </p>
-                      </div>
-                    )}
-                  </div>
-
-                  {/* SUGGESTED COACH MISSIONS SECTION */}
-                  <div style={{ borderTop: '1px solid rgba(61,44,46,0.08)', paddingTop: 'var(--space-4)', marginBottom: 'var(--space-6)' }}>
-                    <h4 style={{ fontSize: '1rem', fontWeight: 600, color: 'var(--color-text)', marginBottom: 'var(--space-3)', display: 'flex', alignItems: 'center', gap: 6 }}>
-                      <HelpCircle size={16} color="var(--color-primary)" />
-                      Suggestions pool from your AI Career Twin
-                    </h4>
-                    
-                    {memory.suggestedMissions && memory.suggestedMissions.length > 0 ? (
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                        {memory.suggestedMissions.slice(0, 3).map(sug => (
-                          <div 
-                            key={sug.id}
-                            style={{ 
-                              display: 'flex', 
-                              justifyContent: 'space-between',
-                              alignItems: 'flex-start',
-                              padding: '10px 14px', 
-                              backgroundColor: 'rgba(61,44,46,0.02)',
-                              border: '1px solid rgba(61,44,46,0.04)',
-                              borderRadius: 'var(--radius-sm)'
-                            }}
-                          >
-                            <div style={{ flex: 1, marginRight: 12 }}>
-                              <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 4 }}>
-                                <span style={{ fontSize: '0.88rem', fontWeight: 600, color: 'var(--color-text)' }}>{sug.text}</span>
-                                <span style={{ fontSize: '0.7rem', padding: '1px 5px', borderRadius: 3, backgroundColor: 'rgba(64, 158, 255, 0.1)', color: 'var(--color-primary)' }}>
-                                  {sug.difficulty}
-                                </span>
-                                <span style={{ fontSize: '0.7rem', color: 'var(--color-text-light)' }}>
-                                  {sug.category}
-                                </span>
-                              </div>
-                              <p style={{ fontSize: '0.8rem', color: 'var(--color-text-light)', margin: 0 }}>{sug.why}</p>
-                            </div>
-                            
-                            <div style={{ display: 'flex', gap: 4 }}>
-                              <button 
-                                onClick={() => handlePromoteSuggestion(sug.id)}
-                                title="Promote to active targets"
-                                style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', border: '1px solid var(--color-primary)', background: 'none', color: 'var(--color-primary)', cursor: 'pointer', borderRadius: '4px', width: 26, height: 26 }}
-                                onMouseOver={e => e.currentTarget.style.backgroundColor = 'var(--color-primary)'}
-                                onMouseOut={e => e.currentTarget.style.backgroundColor = 'transparent'}
-                              >
-                                +
-                              </button>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    ) : (
-                      <p style={{ color: 'var(--color-text-light)', fontSize: '0.85rem' }}>Analyzing profile to compile smart suggestions...</p>
-                    )}
-                  </div>
-
-                  {/* MISSION HISTORY SECTION */}
-                  {memory.missionHistory && memory.missionHistory.length > 0 && (
-                    <div style={{ borderTop: '1px solid rgba(61,44,46,0.08)', paddingTop: 'var(--space-4)' }}>
-                      <h4 style={{ fontSize: '1rem', fontWeight: 600, color: 'var(--color-text)', marginBottom: 'var(--space-3)', display: 'flex', alignItems: 'center', gap: 6 }}>
-                        <Award size={16} color="var(--color-success)" />
-                        Mission Accomplishments & History Log ({memory.missionHistory.length})
-                      </h4>
-                      
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: 8, maxHeight: 200, overflowY: 'auto', paddingRight: 4 }}>
-                        {memory.missionHistory.slice().reverse().map((hist, idx) => (
-                          <div 
-                            key={hist.id || idx}
-                            style={{ 
-                              display: 'flex', 
-                              justifyContent: 'space-between',
-                              alignItems: 'center',
-                              padding: '10px 12px', 
-                              backgroundColor: 'rgba(78, 139, 98, 0.03)',
-                              border: '1px solid rgba(78, 139, 98, 0.08)',
-                              borderRadius: 'var(--radius-sm)'
-                            }}
-                          >
-                            <div>
-                              <div style={{ fontSize: '0.88rem', fontWeight: 600, color: 'var(--color-text)' }}>
-                                {hist.text}
-                              </div>
-                              <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginTop: 4 }}>
-                                <span style={{ fontSize: '0.72rem', color: 'var(--color-text-light)' }}>
-                                  Done: {hist.completedAt ? new Date(hist.completedAt).toLocaleDateString() : 'N/A'}
-                                </span>
-                                <span style={{ fontSize: '0.72rem', padding: '1px 5px', borderRadius: 3, backgroundColor: 'rgba(78, 139, 98, 0.1)', color: 'var(--color-success)' }}>
-                                  {hist.difficulty}
-                                </span>
-                                <span style={{ fontSize: '0.72rem', color: 'var(--color-text-light)' }}>
-                                  {hist.category}
-                                </span>
-                                {hist.feedback && (
-                                  <span style={{ fontSize: '0.72rem', color: 'var(--color-primary)', fontWeight: 600 }}>
-                                    Rating: {hist.feedback}
-                                  </span>
-                                )}
-                              </div>
-                            </div>
-
-                            <div>
-                              {hist.evidence ? (
-                                <a 
-                                  href={hist.evidence.url} 
-                                  target="_blank" 
-                                  rel="noopener noreferrer" 
-                                  style={{ 
-                                    fontSize: '0.78rem', 
-                                    color: 'var(--color-primary)', 
-                                    display: 'flex', 
-                                    alignItems: 'center', 
-                                    gap: 3,
-                                    textDecoration: 'none',
-                                    fontWeight: 600
-                                  }}
-                                >
-                                  <ExternalLink size={12} /> {hist.evidence.type}
-                                </a>
-                              ) : (
-                                <span style={{ fontSize: '0.75rem', color: 'var(--color-text-light)', fontStyle: 'italic' }}>
-                                  No evidence links
-                                </span>
-                              )}
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                </>
-              ) : (
-                <div style={{ padding: 'var(--space-4) 0', display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                  <p style={{ color: 'var(--color-text-light)', fontSize: '0.95rem', margin: 0 }}>
-                    Complete profile analysis to unlock personalized missions.
-                  </p>
-                  <div style={{ display: 'flex', gap: 8 }}>
-                    <input 
-                      type="text" 
-                      placeholder="GitHub Username" 
-                      value={githubInput} 
-                      onChange={e => setGithubInput(e.target.value)} 
-                      style={{ flex: 1, padding: '8px 12px', borderRadius: 'var(--radius-sm)', border: '1px solid rgba(61,44,46,0.1)', fontSize: '0.9rem' }} 
-                    />
-                    <Button size="sm" onClick={handleConnectGithub}>Connect</Button>
-                  </div>
-                </div>
-              )}
-            </Card>
-          </motion.div>
-
-          {/* MISSION COMPLETION CHECK-IN MODAL */}
-          {completingMission && (
-            <div style={{ 
-              position: 'fixed', 
-              top: 0, 
-              left: 0, 
-              right: 0, 
-              bottom: 0, 
-              backgroundColor: 'rgba(0,0,0,0.4)', 
-              backdropFilter: 'blur(4px)', 
-              display: 'flex', 
-              alignItems: 'center', 
-              justifyContent: 'center', 
-              zIndex: 9999,
-              padding: '16px'
-            }}>
-              <motion.div 
-                initial={{ scale: 0.95, opacity: 0 }} 
-                animate={{ scale: 1, opacity: 1 }} 
-                style={{ 
-                  backgroundColor: 'var(--color-card)', 
-                  borderRadius: 'var(--radius-lg)', 
-                  padding: '28px', 
-                  maxWidth: '480px', 
-                  width: '100%', 
-                  boxShadow: 'var(--shadow-lg)',
-                  border: '1px solid rgba(61,44,46,0.1)'
-                }}
-              >
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--space-4)' }}>
-                  <h3 style={{ fontSize: '1.25rem', fontWeight: 700, margin: 0, display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <CheckCircle size={22} color="var(--color-success)" />
-                    Mission Accomplished Check-In
-                  </h3>
-                  <button onClick={() => setCompletingMission(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--color-text-light)' }}>
-                    <X size={18} />
-                  </button>
-                </div>
-                
-                <p style={{ fontSize: '0.92rem', color: 'var(--color-text-light)', marginBottom: 'var(--space-5)' }}>
-                  Congratulations on finishing: <strong>"{completingMission.text}"</strong>. Submit evidence link below to lock in readiness score impact!
-                </p>
-                
-                <form onSubmit={handleCompleteMissionWithEvidence} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-                  <div>
-                    <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 700, textTransform: 'uppercase', color: 'var(--color-text-light)', marginBottom: 6 }}>
-                      Proof of Completion / Evidence Link (Optional)
-                    </label>
-                    <input 
-                      type="url" 
-                      placeholder="e.g. https://github.com/your-username/repo" 
-                      value={evidenceUrl}
-                      onChange={e => setEvidenceUrl(e.target.value)}
-                      style={{ width: '100%', padding: '10px 12px', borderRadius: 'var(--radius-sm)', border: '1px solid rgba(61,44,46,0.15)', fontSize: '0.9rem' }}
-                    />
-                  </div>
-                  
-                  <div>
-                    <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 700, textTransform: 'uppercase', color: 'var(--color-text-light)', marginBottom: 6 }}>
-                      Evidence Source Type
-                    </label>
-                    <select 
-                      value={evidenceType}
-                      onChange={e => setEvidenceType(e.target.value as any)}
-                      style={{ width: '100%', padding: '8px 12px', borderRadius: 'var(--radius-sm)', border: '1px solid rgba(61,44,46,0.15)', fontSize: '0.9rem' }}
-                    >
-                      <option value="GitHub">GitHub Repository</option>
-                      <option value="Kaggle">Kaggle Notebook</option>
-                      <option value="Portfolio">Portfolio URL</option>
-                      <option value="Certificate">Certificate Link</option>
-                      <option value="Other">Other / Blog post</option>
-                    </select>
-                  </div>
-
-                  <div>
-                    <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 700, textTransform: 'uppercase', color: 'var(--color-text-light)', marginBottom: 8 }}>
-                      Difficulty Check-in: How did you find this mission?
-                    </label>
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10 }}>
-                      {['Easy', 'Appropriate', 'Difficult'].map((diff) => (
-                        <button
-                          key={diff}
-                          type="button"
-                          onClick={() => setFeedbackVal(diff as any)}
-                          style={{
-                            padding: '10px',
-                            borderRadius: 'var(--radius-sm)',
-                            border: feedbackVal === diff ? '2px solid var(--color-primary)' : '1px solid rgba(61,44,46,0.15)',
-                            backgroundColor: feedbackVal === diff ? 'rgba(201,106,74,0.05)' : 'white',
-                            color: feedbackVal === diff ? 'var(--color-primary)' : 'var(--color-text)',
-                            fontWeight: feedbackVal === diff ? 700 : 500,
-                            cursor: 'pointer',
-                            transition: 'all 0.2s'
-                          }}
-                        >
-                          {diff}
-                        </button>
-                      ))}
-                    </div>
-                    <span style={{ display: 'block', fontSize: '0.75rem', color: 'var(--color-text-light)', marginTop: 6 }}>
-                      Your AI Career Twin will calibrate the difficulty of future suggestions based on this.
-                    </span>
-                  </div>
-
-                  <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 8 }}>
-                    <Button variant="outline" type="button" onClick={() => setCompletingMission(null)}>Cancel</Button>
-                    <Button type="submit">Verify & Log Progress</Button>
-                  </div>
-                </form>
-              </motion.div>
-            </div>
-          )}
-
-          {/* REGENERATE / SKIP REASON MODAL */}
-          {isConfirmSkipModalOpen && skippingMission && (
-            <div style={{ 
-              position: 'fixed', 
-              top: 0, 
-              left: 0, 
-              right: 0, 
-              bottom: 0, 
-              backgroundColor: 'rgba(0,0,0,0.4)', 
-              backdropFilter: 'blur(4px)', 
-              display: 'flex', 
-              alignItems: 'center', 
-              justifyContent: 'center', 
-              zIndex: 9999,
-              padding: '16px'
-            }}>
-              <motion.div 
-                initial={{ scale: 0.95, opacity: 0 }} 
-                animate={{ scale: 1, opacity: 1 }} 
-                style={{ 
-                  backgroundColor: 'var(--color-card)', 
-                  borderRadius: 'var(--radius-lg)', 
-                  padding: '24px', 
-                  maxWidth: '420px', 
-                  width: '100%', 
-                  boxShadow: 'var(--shadow-lg)',
-                  border: '1px solid rgba(61,44,46,0.1)'
-                }}
-              >
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--space-4)' }}>
-                  <h3 style={{ fontSize: '1.15rem', fontWeight: 700, margin: 0 }}>
-                    Regenerate AI Mission
-                  </h3>
-                  <button onClick={() => { setSkippingMission(null); setIsConfirmSkipModalOpen(false); }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--color-text-light)' }}>
-                    <X size={18} />
-                  </button>
-                </div>
-                
-                <p style={{ fontSize: '0.9rem', color: 'var(--color-text-light)', marginBottom: 'var(--space-4)' }}>
-                  Why would you like to replace the mission: <strong>"{skippingMission.text}"</strong>?
-                </p>
-                
-                <form onSubmit={handleConfirmRegenerate} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-                  <div>
-                    <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 700, textTransform: 'uppercase', color: 'var(--color-text-light)', marginBottom: 6 }}>
-                      Select Reason
-                    </label>
-                    <select 
-                      value={skipReason}
-                      onChange={e => setSkipReason(e.target.value)}
-                      style={{ width: '100%', padding: '8px 12px', borderRadius: 'var(--radius-sm)', border: '1px solid rgba(61,44,46,0.15)', fontSize: '0.9rem' }}
-                    >
-                      <option value="Too beginner level">Too beginner level / Already know this</option>
-                      <option value="Too advanced">Too advanced / Lacking pre-requisites</option>
-                      <option value="Not interested in this skill">Not interested in this skill right now</option>
-                      <option value="Focusing on other roadmap items">Focusing on other roadmap items</option>
-                      <option value="Completed something similar offline">Completed something similar offline</option>
-                    </select>
-                  </div>
-                  
-                  <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 8 }}>
-                    <Button variant="outline" type="button" onClick={() => { setSkippingMission(null); setIsConfirmSkipModalOpen(false); }}>Cancel</Button>
-                    <Button type="submit">Regenerate Mission</Button>
-                  </div>
-                </form>
-              </motion.div>
-            </div>
-          )}
-
-          {/* 4. Recent Activity Card */}
-          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.5 }}>
-            <Card hoverEffect>
-              <h3 style={{ fontSize: '1.1rem', marginBottom: 'var(--space-4)', color: 'var(--color-text-light)' }}>Recent Activity</h3>
-              {memory.activities && memory.activities.length > 0 ? (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
-                  {memory.activities.slice().reverse().map((act, idx) => (
-                    <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                        <div style={{ width: 8, height: 8, borderRadius: '50%', backgroundColor: 'var(--color-primary)' }}></div>
-                        <span style={{ fontSize: '0.95rem', fontWeight: 500, color: 'var(--color-text)' }}>{act.label}</span>
-                      </div>
-                      <span style={{ fontSize: '0.8rem', color: 'var(--color-text-light)' }}>{formatTimestamp(act.timestamp)}</span>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <div style={{ padding: 'var(--space-4) 0', textAlign: 'center' }}>
-                  <p style={{ color: 'var(--color-text-light)', fontSize: '0.95rem', margin: 0 }}>
-                    No activity recorded yet.
-                  </p>
-                </div>
-              )}
-            </Card>
-          </motion.div>
-
-          {/* Tech Pulse */}
-          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.55 }}>
-            <Card hoverEffect>
-              <h3 style={{ fontSize: '1.1rem', marginBottom: 'var(--space-4)', color: 'var(--color-text-light)' }}>Tech Pulse</h3>
-              {analysis ? (
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 'var(--space-4)', padding: 'var(--space-4)', backgroundColor: 'var(--color-background)', borderRadius: 'var(--radius-md)' }}>
-                  <div>
-                    <div style={{ fontSize: '0.85rem', fontWeight: 700, textTransform: 'uppercase', color: 'var(--color-success)', marginBottom: '0.8rem' }}>Learn Now</div>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                      {analysis.techPulse?.now?.map((skill) => (
-                        <span key={skill} style={{ fontWeight: 500 }}>{skill}</span>
-                      ))}
-                    </div>
-                  </div>
-                  <div>
-                    <div style={{ fontSize: '0.85rem', fontWeight: 700, textTransform: 'uppercase', color: 'var(--color-warning)', marginBottom: '0.8rem' }}>Learn Later</div>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                      {analysis.techPulse?.later?.map((skill) => (
-                        <span key={skill} style={{ fontWeight: 500 }}>{skill}</span>
-                      ))}
-                    </div>
-                  </div>
-                  <div>
-                    <div style={{ fontSize: '0.85rem', fontWeight: 700, textTransform: 'uppercase', color: 'var(--color-danger)', marginBottom: '0.8rem' }}>Ignore</div>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                      {analysis.techPulse?.ignore?.map((skill) => (
-                        <span key={skill} style={{ textDecoration: 'line-through', opacity: 0.5 }}>{skill}</span>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-              ) : (
-                <div style={{ padding: 'var(--space-4) 0', textAlign: 'center' }}>
-                  <p style={{ color: 'var(--color-text-light)', fontSize: '0.95rem', margin: 0 }}>
-                    Complete profile analysis to view trending skills.
-                  </p>
-                </div>
-              )}
-            </Card>
-          </motion.div>
-
+          {/* Skills Capability balance */}
+          <SkillsSummary 
+            dynamicProfile={dynamicProfile}
+            analysis={analysis}
+            onOpenTwin={() => navigate('/career-twin')}
+          />
         </div>
 
       </div>
+
+      {/* 1. MISSION COMPLETION CHECK-IN MODAL */}
+      {completingMission && (
+        <div style={{ 
+          position: 'fixed', 
+          top: 0, 
+          left: 0, 
+          right: 0, 
+          bottom: 0, 
+          backgroundColor: 'rgba(45, 42, 38, 0.4)', 
+          backdropFilter: 'blur(4px)', 
+          display: 'flex', 
+          alignItems: 'center', 
+          justifyContent: 'center', 
+          zIndex: 9999,
+          padding: '16px'
+        }}>
+          <motion.div 
+            initial={{ scale: 0.95, opacity: 0 }} 
+            animate={{ scale: 1, opacity: 1 }} 
+            style={{ 
+              backgroundColor: 'var(--color-card)', 
+              borderRadius: 'var(--radius-md)', 
+              padding: '28px', 
+              maxWidth: '480px', 
+              width: '100%', 
+              boxShadow: 'var(--shadow-lg)',
+              border: '1px solid var(--color-border)'
+            }}
+          >
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--space-4)' }}>
+              <h3 style={{ fontSize: '1.25rem', fontWeight: 700, margin: 0, display: 'flex', alignItems: 'center', gap: 8 }}>
+                <CheckCircle size={22} color="var(--color-success)" />
+                Mission Accomplished Check-In
+              </h3>
+              <button onClick={() => setCompletingMission(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--color-text-light)' }}>
+                <X size={18} />
+              </button>
+            </div>
+            
+            <p style={{ fontSize: '0.92rem', color: 'var(--color-text-light)', marginBottom: 'var(--space-5)' }}>
+              Congratulations on finishing: <strong>"{completingMission.text}"</strong>. Submit evidence link below to lock in readiness score impact!
+            </p>
+            
+            <form onSubmit={handleCompleteMissionWithEvidence} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+              <div>
+                <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 700, textTransform: 'uppercase', color: 'var(--color-text-light)', marginBottom: 6 }}>
+                  Proof of Completion / Evidence Link (Optional)
+                </label>
+                <input 
+                  type="url" 
+                  placeholder="e.g. https://github.com/your-username/repo" 
+                  value={evidenceUrl}
+                  onChange={e => setEvidenceUrl(e.target.value)}
+                  style={{ width: '100%', padding: '10px 12px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--color-border)', fontSize: '0.9rem' }}
+                />
+              </div>
+              
+              <div>
+                <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 700, textTransform: 'uppercase', color: 'var(--color-text-light)', marginBottom: 6 }}>
+                  Evidence Source Type
+                </label>
+                <select 
+                  value={evidenceType}
+                  onChange={e => setEvidenceType(e.target.value as any)}
+                  style={{ width: '100%', padding: '8px 12px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--color-border)', fontSize: '0.9rem' }}
+                >
+                  <option value="GitHub">GitHub Repository</option>
+                  <option value="Kaggle">Kaggle Notebook</option>
+                  <option value="Portfolio">Portfolio URL</option>
+                  <option value="Certificate">Certificate Link</option>
+                  <option value="Other">Other / Blog post</option>
+                </select>
+              </div>
+
+              <div>
+                <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 700, textTransform: 'uppercase', color: 'var(--color-text-light)', marginBottom: 8 }}>
+                  Difficulty Check-in: How did you find this mission?
+                </label>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10 }}>
+                  {['Easy', 'Appropriate', 'Difficult'].map((diff) => (
+                    <button
+                      key={diff}
+                      type="button"
+                      onClick={() => setFeedbackVal(diff as any)}
+                      style={{
+                        padding: '10px',
+                        borderRadius: 'var(--radius-sm)',
+                        border: feedbackVal === diff ? '2px solid var(--color-primary)' : '1px solid var(--color-border)',
+                        backgroundColor: feedbackVal === diff ? 'rgba(201,106,74,0.05)' : '#FFFFFF',
+                        color: feedbackVal === diff ? 'var(--color-primary)' : 'var(--color-text)',
+                        fontWeight: feedbackVal === diff ? 700 : 500,
+                        cursor: 'pointer',
+                        transition: 'all var(--transition-fast)'
+                      }}
+                    >
+                      {diff}
+                    </button>
+                  ))}
+                </div>
+                <span style={{ display: 'block', fontSize: '0.75rem', color: 'var(--color-text-light)', marginTop: 6 }}>
+                  Your AI Career Twin will calibrate the difficulty of future suggestions based on this.
+                </span>
+              </div>
+
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 8 }}>
+                <Button variant="outline" type="button" onClick={() => setCompletingMission(null)}>Cancel</Button>
+                <Button type="submit">Verify & Log Progress</Button>
+              </div>
+            </form>
+          </motion.div>
+        </div>
+      )}
+
+      {/* 2. REGENERATE / SKIP REASON MODAL */}
+      {isConfirmSkipModalOpen && skippingMission && (
+        <div style={{ 
+          position: 'fixed', 
+          top: 0, 
+          left: 0, 
+          right: 0, 
+          bottom: 0, 
+          backgroundColor: 'rgba(45, 42, 38, 0.4)', 
+          backdropFilter: 'blur(4px)', 
+          display: 'flex', 
+          alignItems: 'center', 
+          justifyContent: 'center', 
+          zIndex: 9999,
+          padding: '16px'
+        }}>
+          <motion.div 
+            initial={{ scale: 0.95, opacity: 0 }} 
+            animate={{ scale: 1, opacity: 1 }} 
+            style={{ 
+              backgroundColor: 'var(--color-card)', 
+              borderRadius: 'var(--radius-md)', 
+              padding: '24px', 
+              maxWidth: '420px', 
+              width: '100%', 
+              boxShadow: 'var(--shadow-lg)',
+              border: '1px solid var(--color-border)'
+            }}
+          >
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--space-4)' }}>
+              <h3 style={{ fontSize: '1.15rem', fontWeight: 700, margin: 0 }}>
+                Regenerate AI Mission
+              </h3>
+              <button onClick={() => { setSkippingMission(null); setIsConfirmSkipModalOpen(false); }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--color-text-light)' }}>
+                <X size={18} />
+              </button>
+            </div>
+            
+            <p style={{ fontSize: '0.9rem', color: 'var(--color-text-light)', marginBottom: 'var(--space-4)' }}>
+              Why would you like to replace the mission: <strong>"{skippingMission.text}"</strong>?
+            </p>
+            
+            <form onSubmit={handleConfirmRegenerate} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+              <div>
+                <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 700, textTransform: 'uppercase', color: 'var(--color-text-light)', marginBottom: 6 }}>
+                  Select Reason
+                </label>
+                <select 
+                  value={skipReason}
+                  onChange={e => setSkipReason(e.target.value)}
+                  style={{ width: '100%', padding: '8px 12px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--color-border)', fontSize: '0.9rem' }}
+                >
+                  <option value="Too beginner level">Too beginner level / Already know this</option>
+                  <option value="Too advanced">Too advanced / Lacking pre-requisites</option>
+                  <option value="Not interested in this skill">Not interested in this skill right now</option>
+                  <option value="Focusing on other roadmap items">Focusing on other roadmap items</option>
+                  <option value="Completed something similar offline">Completed something similar offline</option>
+                </select>
+              </div>
+              
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 8 }}>
+                <Button variant="outline" type="button" onClick={() => { setSkippingMission(null); setIsConfirmSkipModalOpen(false); }}>Cancel</Button>
+                <Button type="submit">Regenerate Mission</Button>
+              </div>
+            </form>
+          </motion.div>
+        </div>
+      )}
+
+      {/* 3. INLINE CUSTOM MISSION CREATOR MODAL */}
+      {isCreatingMission && (
+        <div style={{ 
+          position: 'fixed', 
+          top: 0, 
+          left: 0, 
+          right: 0, 
+          bottom: 0, 
+          backgroundColor: 'rgba(45, 42, 38, 0.4)', 
+          backdropFilter: 'blur(4px)', 
+          display: 'flex', 
+          alignItems: 'center', 
+          justifyContent: 'center', 
+          zIndex: 9999,
+          padding: '16px'
+        }}>
+          <motion.div 
+            initial={{ scale: 0.95, opacity: 0 }} 
+            animate={{ scale: 1, opacity: 1 }} 
+            style={{ 
+              padding: '28px', 
+              backgroundColor: 'var(--color-card)', 
+              borderRadius: 'var(--radius-md)', 
+              border: '1px solid var(--color-border)', 
+              boxShadow: 'var(--shadow-lg)',
+              maxWidth: '500px',
+              width: '100%',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 16
+            }}
+          >
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <h3 style={{ fontSize: '1.2rem', fontWeight: 700, margin: 0 }}>Add Custom Target Goal</h3>
+              <button onClick={() => setIsCreatingMission(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--color-text-light)' }}>
+                <X size={18} />
+              </button>
+            </div>
+            
+            <form onSubmit={handleCreateCustomMission} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+              <div>
+                <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 700, textTransform: 'uppercase', color: 'var(--color-text-light)', marginBottom: 6 }}>
+                  Goal Description
+                </label>
+                <input 
+                  type="text" 
+                  placeholder="What is your immediate goal? (e.g. Solve 5 SQL Joins)" 
+                  value={customText}
+                  onChange={e => setCustomText(e.target.value)}
+                  required
+                  style={{ width: '100%', padding: '10px 12px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--color-border)', fontSize: '0.9rem' }}
+                />
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10 }}>
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, textTransform: 'uppercase', color: 'var(--color-text-light)', marginBottom: 6 }}>Category</label>
+                  <select 
+                    value={customCategory} 
+                    onChange={e => setCustomCategory(e.target.value as any)}
+                    style={{ width: '100%', padding: '8px 12px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--color-border)', fontSize: '0.85rem' }}
+                  >
+                    <option value="Learning">Learning</option>
+                    <option value="Project">Project</option>
+                    <option value="Internship">Internship</option>
+                    <option value="Networking">Networking</option>
+                    <option value="Certification">Certification</option>
+                    <option value="Interview Preparation">Interview Prep</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, textTransform: 'uppercase', color: 'var(--color-text-light)', marginBottom: 6 }}>Difficulty</label>
+                  <select 
+                    value={customDifficulty} 
+                    onChange={e => setCustomDifficulty(e.target.value as any)}
+                    style={{ width: '100%', padding: '8px 12px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--color-border)', fontSize: '0.85rem' }}
+                  >
+                    <option value="Beginner">Beginner</option>
+                    <option value="Intermediate">Intermediate</option>
+                    <option value="Advanced">Advanced</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, textTransform: 'uppercase', color: 'var(--color-text-light)', marginBottom: 6 }}>Topic / Skill</label>
+                  <input 
+                    type="text" 
+                    placeholder="e.g. SQL" 
+                    value={customSkill} 
+                    onChange={e => setCustomSkill(e.target.value)}
+                    style={{ width: '100%', padding: '8px 12px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--color-border)', fontSize: '0.85rem' }}
+                  />
+                </div>
+              </div>
+
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 8 }}>
+                <Button variant="outline" type="button" onClick={() => setIsCreatingMission(false)}>Cancel</Button>
+                <Button type="submit">Add to Roadmap</Button>
+              </div>
+            </form>
+          </motion.div>
+        </div>
+      )}
     </div>
   );
 };

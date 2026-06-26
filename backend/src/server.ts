@@ -85,16 +85,9 @@ app.post(
         console.log("================================");
 
       } catch (err: any) {
-        console.error("Gemini Error:", err);
-
-        if (err.status === 429) {
-          return res.status(429).json({
-            error: "Gemini quota exceeded. Please try again in a minute."
-          });
-        }
-
-        return res.status(500).json({
-          error: "Failed to analyze resume"
+        console.error("Gemini Error Details:", err);
+        return res.status(err.status || 500).json({
+          error: `AI analysis failed: ${err.message || "Failed to analyze resume with AI"}`
         });
       }
       console.log("PDF TEXT LENGTH:", pdfData.text.length);

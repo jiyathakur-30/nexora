@@ -290,10 +290,10 @@ const Settings: React.FC = () => {
           </div>
         </Card>
 
-        {/* Connected Sources Section */}
+        {/* Connected Accounts Section */}
         <Card hoverEffect>
-          <h3 style={{ fontSize: '1.4rem', fontWeight: 700, marginBottom: 'var(--space-2)' }}>Connected Sources</h3>
-          <p style={{ color: 'var(--color-text-light)', marginBottom: 'var(--space-6)' }}>Manage the data feeds that power your AI Career Twin.</p>
+          <h3 style={{ fontSize: '1.4rem', fontWeight: 700, marginBottom: 'var(--space-2)' }}>Connected Accounts</h3>
+          <p style={{ color: 'var(--color-text-light)', marginBottom: 'var(--space-6)' }}>Manage the account integrations and resume feeds that power your AI Career Twin.</p>
 
           {/* Completeness & Quality indicator banner */}
           <div style={{ padding: 'var(--space-4)', backgroundColor: 'var(--color-background)', borderRadius: 'var(--radius-md)', border: '1px solid rgba(61,44,46,0.05)', marginBottom: 'var(--space-6)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px' }}>

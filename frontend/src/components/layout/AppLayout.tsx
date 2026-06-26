@@ -1,49 +1,106 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { NavLink, Outlet } from 'react-router-dom';
-import { LayoutDashboard, Target, Users, Settings, MessageCircle, Activity } from 'lucide-react';
+import { LayoutDashboard, Target, Users, Settings, MessageCircle, Activity, User } from 'lucide-react';
 import FloatingMentor from './FloatingMentor';
 
 const Sidebar: React.FC = () => {
   return (
-    <div style={{ width: '240px', backgroundColor: 'var(--color-card)', borderRight: '1px solid rgba(61,44,46,0.1)', height: '100vh', position: 'fixed', display: 'flex', flexDirection: 'column' }}>
-      <div style={{ padding: 'var(--space-6)', fontSize: '1.5rem', fontWeight: 800, color: 'var(--color-primary)', display: 'flex', alignItems: 'center', gap: '8px' }}>
-        <div style={{ width: 32, height: 32, borderRadius: 8, backgroundColor: 'var(--color-primary)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-          <Target size={20} color="white" />
+    <div style={{ 
+      width: '240px', 
+      backgroundColor: 'var(--color-sidebar)', 
+      borderRight: '1px solid var(--color-border)', 
+      height: '100vh', 
+      position: 'fixed', 
+      display: 'flex', 
+      flexDirection: 'column',
+      zIndex: 100
+    }}>
+      {/* Brand logo */}
+      <div style={{ 
+        padding: 'var(--space-5) var(--space-4)', 
+        fontSize: '1.25rem', 
+        fontWeight: 800, 
+        color: 'var(--color-primary)', 
+        display: 'flex', 
+        alignItems: 'center', 
+        gap: '10px',
+        letterSpacing: '-0.02em'
+      }}>
+        <div style={{ 
+          width: 28, 
+          height: 28, 
+          borderRadius: '7px', 
+          backgroundColor: 'var(--color-primary)', 
+          display: 'flex', 
+          alignItems: 'center', 
+          justifyContent: 'center' 
+        }}>
+          <Target size={16} color="white" />
         </div>
         Nexora
       </div>
-      <nav style={{ flex: 1, padding: 'var(--space-4)', display: 'flex', flexDirection: 'column', gap: '8px' }}>
-        <SidebarLink to="/dashboard" icon={<LayoutDashboard size={20} />} label="Dashboard" />
-        <SidebarLink to="/career-twin" icon={<Target size={20} />} label="Career Twin" />
-        <SidebarLink to="/pulse" icon={<Activity size={20} />} label="Pulse" />
-        <SidebarLink to="/mentor" icon={<MessageCircle size={20} />} label="AI Mentor" />
-        <SidebarLink to="/opportunity-hub" icon={<Users size={20} />} label="Opportunity Hub" />
+
+      {/* Main Nav Links */}
+      <nav style={{ 
+        flex: 1, 
+        padding: 'var(--space-3) var(--space-4)', 
+        display: 'flex', 
+        flexDirection: 'column', 
+        gap: '6px' 
+      }}>
+        <SidebarLink to="/dashboard" icon={<LayoutDashboard size={18} />} label="Dashboard" />
+        <SidebarLink to="/career-twin" icon={<Target size={18} />} label="Career Twin" />
+        <SidebarLink to="/pulse" icon={<Activity size={18} />} label="Pulse" />
+        <SidebarLink to="/mentor" icon={<MessageCircle size={18} />} label="AI Mentor" />
+        <SidebarLink to="/opportunity-hub" icon={<Users size={18} />} label="Opportunity Hub" />
       </nav>
-      <div style={{ padding: 'var(--space-4)', borderTop: '1px solid rgba(61,44,46,0.1)', display: 'flex', flexDirection: 'column', gap: '8px' }}>
-        <SidebarLink to="/settings" icon={<Settings size={20} />} label="Settings" />
+
+      {/* Footer Nav Links */}
+      <div style={{ 
+        padding: 'var(--space-4)', 
+        borderTop: '1px solid var(--color-border)', 
+        display: 'flex', 
+        flexDirection: 'column', 
+        gap: '6px' 
+      }}>
+        <SidebarLink to="/settings" icon={<Settings size={18} />} label="Settings" />
       </div>
     </div>
   );
 };
 
 const SidebarLink: React.FC<{ to: string; icon: React.ReactNode; label: string }> = ({ to, icon, label }) => {
+  const [isHovered, setIsHovered] = useState(false);
+
   return (
     <NavLink 
       to={to} 
-      style={({ isActive }) => ({
-        display: 'flex',
-        alignItems: 'center',
-        gap: '12px',
-        padding: '10px 16px',
-        borderRadius: 'var(--radius-sm)',
-        color: isActive ? 'white' : 'var(--color-text)',
-        backgroundColor: isActive ? 'var(--color-primary)' : 'transparent',
-        textDecoration: 'none',
-        fontWeight: isActive ? 600 : 500,
-        transition: 'all 0.2s'
-      })}
+      onMouseEnter={() => setIsHovered(true)}
+      onMouseLeave={() => setIsHovered(false)}
+      style={({ isActive }) => {
+        const activeBg = 'rgba(201, 106, 74, 0.08)';
+        const hoverBg = 'rgba(201, 106, 74, 0.03)';
+        const bg = isActive ? activeBg : (isHovered ? hoverBg : 'transparent');
+        const color = isActive ? 'var(--color-primary)' : 'var(--color-text-light)';
+        
+        return {
+          display: 'flex',
+          alignItems: 'center',
+          gap: '12px',
+          padding: '10px 14px',
+          borderRadius: 'var(--radius-sm)',
+          color: color,
+          backgroundColor: bg,
+          textDecoration: 'none',
+          fontSize: '0.9rem',
+          fontWeight: isActive ? 600 : 500,
+          transition: 'all 0.2s ease-in-out'
+        };
+      }}
     >
-      {icon}
+      <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        {icon}
+      </span>
       {label}
     </NavLink>
   );
