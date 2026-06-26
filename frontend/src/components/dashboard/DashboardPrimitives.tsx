@@ -160,7 +160,7 @@ export const ActionCard: React.FC<ActionCardProps> = ({
           onClick={onCtaClick}
           style={{ 
             backgroundColor: 'var(--color-primary)', 
-            color: '#white', 
+          
             border: 'none', 
             borderRadius: 'var(--radius-sm)', 
             padding: '8px 16px', 
