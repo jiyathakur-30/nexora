@@ -47,6 +47,13 @@ const Dashboard: React.FC = () => {
   const [resumeUploaded, setResumeUploaded] = useState(memory.hasResume);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // Keep local connection state in sync when memory updates (e.g. after resume upload)
+  useEffect(() => {
+    setResumeUploaded(memory.hasResume);
+    setGithub(prev => prev || memory.githubUsername || '');
+    setLinkedin(prev => prev || memory.linkedinUrl || '');
+  }, [memory.hasResume, memory.githubUsername, memory.linkedinUrl]);
+
   // Inputs for inline connection in empty state cards
   const [githubInput, setGithubInput] = useState('');
   const [linkedinInput, setLinkedinInput] = useState('');
@@ -391,9 +398,13 @@ const Dashboard: React.FC = () => {
       let updatedAnalysis = prev.analysis ? { ...prev.analysis } : null;
       const newActivities = [...prev.activities];
 
-      if (updatedAnalysis) {
-        updatedAnalysis.readiness = Math.min(100, updatedAnalysis.readiness + 4);
-
+     if (updatedAnalysis) {
+  const bump = 4;
+  updatedAnalysis.readiness        = Math.min(100, (updatedAnalysis.readiness        ?? 0) + bump);
+  updatedAnalysis.careerReadiness  = Math.min(100, (updatedAnalysis.careerReadiness  ?? updatedAnalysis.readiness) + bump);
+  updatedAnalysis.internshipReadiness = Math.min(100, (updatedAnalysis.internshipReadiness ?? updatedAnalysis.readiness) + bump);
+  updatedAnalysis.jobReadiness     = Math.min(100, (updatedAnalysis.jobReadiness     ?? updatedAnalysis.readiness) + bump);
+  
         if (completedMission.skill && completedMission.skill !== 'General' && completedMission.skill !== 'Custom') {
           const skillLower = completedMission.skill.toLowerCase();
           
@@ -611,27 +622,43 @@ updateMemory(prev => ({
     setAnalysisText('Building Career Twin...');
 
     // Normalize Gemini response to match frontend field expectations
-    const normalizedAnalysis = normalizeAnalysis(rawAnalysis, memory.targetRole);
+   const normalizedAnalysis = normalizeAnalysis(rawAnalysis, memory.targetRole);
 
-    updateMemory(prev => {
-      const tempMem = {
-        ...prev,
-        hasResume: true,
-        resumeFileName: fileName || file.name,
-        isAnalyzed: true,
-        isTwinGenerated: true,
-        analysis: normalizedAnalysis,
-        activities: [
-          ...prev.activities,
-          { id: Math.random().toString(36).substr(2, 9), label: 'Resume Uploaded & Analyzed', timestamp: new Date().toISOString() },
-          { id: Math.random().toString(36).substr(2, 9), label: 'Career Twin Generated', timestamp: new Date().toISOString() },
-        ]
-      };
-      const active = generateMissions(tempMem, 3);
-      const suggestions = generateMissions({ ...tempMem, weeklyMissions: active }, 5);
-      return { ...tempMem, weeklyMissions: active, suggestedMissions: suggestions };
-    });
+updateMemory(prev => {
+  const tempMem = {
+    ...prev,
+    hasResume: true,
+    resumeFileName: fileName || file.name,
+    isAnalyzed: true,
+    isTwinGenerated: true,
+    analysis: normalizedAnalysis,
+    activities: [
+      ...prev.activities,
+      {
+        id: Math.random().toString(36).substr(2, 9),
+        label: "Resume Uploaded & Analyzed",
+        timestamp: new Date().toISOString(),
+      },
+      {
+        id: Math.random().toString(36).substr(2, 9),
+        label: "Career Twin Generated",
+        timestamp: new Date().toISOString(),
+      },
+    ],
+  };
 
+  const active = generateMissions(tempMem, 3);
+  const suggestions = generateMissions(
+    { ...tempMem, weeklyMissions: active },
+    5
+  );
+
+  return {
+    ...tempMem,
+    weeklyMissions: active,
+    suggestedMissions: suggestions,
+  };
+});
     setProgress(100);
   } catch (err: any) {
     console.error('Resume upload error:', err);
@@ -753,15 +780,15 @@ updateMemory(prev => ({
   }
 
   return (
-    <div className="container page-enter-active" style={{ paddingTop: 'var(--space-8)', paddingBottom: 'var(--space-12)' }}>
-      <header style={{ marginBottom: 'var(--space-8)' }}>
-        <h1 style={{ fontSize: '2.5rem', color: 'var(--color-text)', marginBottom: 'var(--space-2)' }}>Hello {firstName} 👋</h1>
-        <p style={{ fontSize: '1.2rem', color: 'var(--color-text-light)' }}>Welcome to your Career Intelligence Dashboard for <strong style={{ color: 'var(--color-primary)' }}>{targetRole}</strong>.</p>
+    <div className="container page-enter-active" style={{ paddingTop: 'var(--space-6)', paddingBottom: 'var(--space-8)' }}>
+      <header style={{ marginBottom: 'var(--space-5)' }}>
+        <h1 style={{ fontSize: '2.2rem', color: 'var(--color-text)', marginBottom: 'var(--space-1)' }}>Hello {firstName} 👋</h1>
+        <p style={{ fontSize: '1.05rem', color: 'var(--color-text-light)' }}>Welcome to your Career Intelligence Dashboard for <strong style={{ color: 'var(--color-primary)' }}>{targetRole}</strong>.</p>
       </header>
 
       {/* Profile Enrichment Cards */}
       {(!githubConnected || !linkedinConnected) && (
-        <div style={{ display: 'grid', gridTemplateColumns: !githubConnected && !linkedinConnected ? '1fr 1fr' : '1fr', gap: 'var(--space-6)', marginBottom: 'var(--space-8)' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: !githubConnected && !linkedinConnected ? '1fr 1fr' : '1fr', gap: 'var(--space-4)', marginBottom: 'var(--space-6)' }}>
           {!githubConnected && (
             <Card hoverEffect style={{ padding: 'var(--space-6)', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', border: '1px solid rgba(201,106,74,0.15)', background: 'var(--color-card)' }}>
               <div>
@@ -842,15 +869,15 @@ updateMemory(prev => ({
             <Card hoverEffect>
               <h3 style={{ fontSize: '1.1rem', marginBottom: 'var(--space-4)', color: 'var(--color-text-light)' }}>Career Readiness</h3>
               <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px' }}>
-                <div style={{ fontSize: '4.5rem', fontWeight: 800, color: 'var(--color-primary)', lineHeight: 1 }}>
-                  {analysis ? `${analysis.alignmentScore ?? analysis.readiness}%` : '--'}
+                <div style={{ fontSize: '3.5rem', fontWeight: 800, color: 'var(--color-primary)', lineHeight: 1 }}>
+                {analysis ? `${analysis.careerReadiness ?? analysis.alignmentScore ?? analysis.readiness}%` : '--'}
                 </div>
               </div>
-              <div style={{ marginTop: 'var(--space-6)', height: 8, background: 'rgba(61,44,46,0.05)', borderRadius: 4, overflow: 'hidden' }}>
-                <motion.div initial={{ width: 0 }} animate={{ width: analysis ? `${analysis.alignmentScore ?? analysis.readiness}%` : '0%' }} transition={{ duration: 1, delay: 0.5 }} style={{ height: '100%', background: 'var(--color-primary)' }} />
+              <div style={{ marginTop: 'var(--space-4)', height: 8, background: 'rgba(61,44,46,0.05)', borderRadius: 4, overflow: 'hidden' }}>
+                <motion.div initial={{ width: 0 }} animate={{ width: analysis ? `${analysis.careerReadiness ?? analysis.alignmentScore ?? analysis.readiness}%` : '0%' }}transition={{ duration: 1, delay: 0.5 }} style={{ height: '100%', background: 'var(--color-primary)' }} />
               </div>
 
-              <div style={{ marginTop: 'var(--space-6)', borderTop: '1px solid rgba(61,44,46,0.1)', paddingTop: 'var(--space-4)' }}>
+              <div style={{ marginTop: 'var(--space-4)', borderTop: '1px solid rgba(61,44,46,0.1)', paddingTop: 'var(--space-3)' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
                   <Target size={18} color="var(--color-text-light)" />
                   <div>
@@ -867,14 +894,14 @@ updateMemory(prev => ({
             <Card hoverEffect>
               <h3 style={{ fontSize: '1.1rem', marginBottom: 'var(--space-4)', color: 'var(--color-text-light)' }}>Internship Readiness</h3>
               <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px' }}>
-                <div style={{ fontSize: '4.5rem', fontWeight: 800, color: 'var(--color-success)', lineHeight: 1 }}>
-                  {analysis ? `${analysis.alignmentScore ?? analysis.readiness}%` : '--'}
+                <div style={{ fontSize: '3.5rem', fontWeight: 800, color: 'var(--color-success)', lineHeight: 1 }}>
+                 {analysis ? `${analysis.internshipReadiness ?? analysis.readiness}%` : '--'}
                 </div>
               </div>
               <div style={{ marginTop: 'var(--space-6)', height: 8, background: 'rgba(61,44,46,0.05)', borderRadius: 4, overflow: 'hidden' }}>
                 <motion.div 
                   initial={{ width: 0 }} 
-                  animate={{ width: analysis ? `${analysis.alignmentScore ?? analysis.readiness}%` : '0%' }} 
+                 animate={{ width: analysis ? `${analysis.internshipReadiness ?? analysis.readiness}%` : '0%' }}
                   transition={{ duration: 1, delay: 0.6 }} 
                   style={{ height: '100%', background: 'var(--color-success)' }} 
                 />
@@ -1032,11 +1059,11 @@ updateMemory(prev => ({
                 <h3 style={{ fontSize: '1.2rem', fontWeight: 700 }}>AI Career Insights</h3>
               </div>
               {analysis ? (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
                   {analysis.insights?.map((insight, idx) => (
-                    <div key={idx} style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>
-                      <span style={{ color: 'var(--color-primary)', fontWeight: 'bold' }}>•</span>
-                      <p style={{ fontSize: '0.95rem', color: 'var(--color-text)', lineHeight: 1.5, margin: 0 }}>{insight}</p>
+                    <div key={idx} style={{ display: 'flex', gap: 10, alignItems: 'center', padding: '8px 10px', background: 'var(--color-background)', borderRadius: 'var(--radius-sm)' }}>
+                      <span style={{ color: 'var(--color-success)', fontWeight: 700, fontSize: '1rem', flexShrink: 0 }}>✓</span>
+                      <span style={{ fontSize: '0.9rem', fontWeight: 600, color: 'var(--color-text)', lineHeight: 1.3 }}>{insight}</span>
                     </div>
                   ))}
                 </div>

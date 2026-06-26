@@ -12,17 +12,24 @@ export function normalizeAnalysis(raw: any, targetRole: string) {
   const gaps = raw.gaps || raw.missingSkills || [];
   const insights = raw.insights || raw.recommendations || [];
   const strengths = raw.strengths || [];
-  const readiness = raw.readiness ?? raw.alignmentScore ?? 0;
+
+  // Three-score system — fall back to single readiness for legacy cached data
+  const careerReadiness     = raw.careerReadiness     ?? raw.readiness ?? raw.alignmentScore ?? 0;
+  const internshipReadiness = raw.internshipReadiness ?? careerReadiness;
+  const jobReadiness        = raw.jobReadiness        ?? careerReadiness;
 
   return {
-    readiness,
-    alignmentScore: readiness, // alias so both references work
+    readiness: careerReadiness,
+    alignmentScore: careerReadiness,
+    careerReadiness,
+    internshipReadiness,
+    jobReadiness,
     strengths,
     gaps,
     currentSkills: raw.currentSkills || strengths,
     futureSkills: raw.futureSkills || gaps.slice(0, 3),
     insights,
-    recommendations: insights, // alias
+    recommendations: insights,
     milestones: raw.milestones || [
       { threshold: 80, label: 'Intern Ready' },
       { threshold: 90, label: 'Industry Ready' },
@@ -51,6 +58,58 @@ const SIMULATION_RULES: Record<string, { impact: number, time: string, demand: s
   'dsa': { impact: 10, time: '8 Weeks', demand: 'High', skills: ['Algorithms', 'Data Structures', 'Problem Solving'], desc: 'Core DSA competency is required for passing technical screens at top-tier companies.' },
   'hackathon': { impact: 12, time: '1 Week', demand: 'High', skills: ['Rapid Prototyping', 'Teamwork', 'Execution'], desc: 'Winning or participating in hackathons demonstrates applied execution and teamwork under pressure.' },
   'open source': { impact: 9, time: 'Ongoing', demand: 'High', skills: ['Collaboration', 'Code Review', 'Git Workflow'], desc: 'Contributing to open source builds a public track record of your code quality.' },
+  'react': { impact: 7, time: '3 Weeks', demand: 'High', skills: ['React', 'Component Design', 'State Management'], desc: 'React is the dominant frontend framework and a required skill for most product engineering roles.' },
+  'typescript': { impact: 5, time: '2 Weeks', demand: 'High', skills: ['TypeScript', 'Type Safety'], desc: 'TypeScript adoption is now standard across enterprise codebases and open source projects.' },
+  'python': { impact: 6, time: '3 Weeks', demand: 'High', skills: ['Python', 'Scripting', 'Data Pipelines'], desc: 'Python fluency is a baseline requirement for AI, data science, and backend engineering roles.' },
+  'sql': { impact: 5, time: '2 Weeks', demand: 'High', skills: ['SQL', 'Database Querying', 'Data Analysis'], desc: 'SQL proficiency is expected for virtually every data-adjacent and backend role.' },
+  'machine learning': { impact: 11, time: '6 Weeks', demand: 'Very High', skills: ['ML Fundamentals', 'Model Training', 'scikit-learn'], desc: 'ML fundamentals directly expand your eligibility for AI and data science roles.' },
+  'portfolio': { impact: 4, time: '2 Weeks', demand: 'Medium', skills: ['Personal Branding', 'Project Showcase'], desc: 'A polished portfolio signals execution ability to recruiters and hiring managers.' },
+  'interview': { impact: 3, time: '1-2 Weeks', demand: 'Medium', skills: ['Interview Preparation', 'Communication'], desc: 'Dedicated interview prep directly improves your conversion rate from application to offer.' },
+  'certification': { impact: 4, time: '3-4 Weeks', demand: 'Medium', skills: ['Domain Knowledge', 'Credential'], desc: 'Recognized certifications provide third-party validation of your skills.' },
+  'git': { impact: 3, time: '1 Week', demand: 'Medium', skills: ['Git', 'Version Control'], desc: 'Git proficiency is a baseline expectation for any software engineering role.' },
+  'api': { impact: 5, time: '2 Weeks', demand: 'High', skills: ['REST APIs', 'Integration', 'Backend Development'], desc: 'API design and consumption is a core skill for full-stack and backend engineering.' },
+};
+
+// Blocklist of clearly non-career activity patterns.
+// Only prompts that match these (and contain NO career intent signals) are rejected.
+// Everything ambiguous is allowed through with a low generic impact.
+const NON_CAREER_PATTERNS = [
+  /\b(watch|binge|stream)\b.*(netflix|youtube|movie|show|anime|series|tv)/i,
+  /\b(play|playing)\b.*(cricket|football|soccer|chess|video game|fortnite|minecraft|pubg|valorant|roblox)/i,
+  /\b(eat|eating|cook|order|grab)\b.*(pizza|food|lunch|dinner|burger|sushi|biryani)/i,
+  /\b(sleep|nap|rest|chill|relax|hang out|party|drink|smoke)\b/i,
+  /^[^a-zA-Z]*$/, // purely non-alphabetic (random chars, numbers only)
+  /^(.)\1{4,}$/, // repeated single character like "aaaaaaa"
+];
+
+// Any of these signals that the input likely has career intent,
+// even if it doesn't match a specific rule key.
+const CAREER_INTENT_SIGNALS = [
+  /\b(learn|learning|study|studying|practice|practicing|master|mastering|improve|improving|develop|developing|build|building|become|prepare|preparing|work on|focus on|get better|get good)\b/i,
+  /\b(skill|skills|engineer|engineering|developer|development|programming|coding|career|job|role|internship|interview|resume|portfolio|project|course|certification|bootcamp|workshop|hackathon|experience|grow|growth)\b/i,
+  /\b(backend|frontend|fullstack|cloud|devops|data|ai|ml|software|product|design|architecture|infrastructure|database|security|networking|leadership|communication|management)\b/i,
+  /\b(aws|docker|kubernetes|react|python|sql|typescript|javascript|java|go|rust|node|git|api|llm|ml|dsa|algorithms|leetcode|kaggle|tensorflow|pytorch|mlops|rag|agent)\b/i,
+];
+
+const isCareerRelevant = (input: string): boolean => {
+  const trimmed = input.trim();
+
+  // Reject if clearly non-career
+  for (const pattern of NON_CAREER_PATTERNS) {
+    if (pattern.test(trimmed)) return false;
+  }
+
+  // Accept only if a positive career intent signal is present.
+  // This rejects meaningless inputs (single random words, gibberish,
+  // food items, greetings) that don't match the blocklist but also
+  // carry no career meaning. Vague but career-adjacent phrases like
+  // "improve professionally" or "gain experience" still pass because
+  // they match signal words (improve, experience → via "develop").
+  for (const signal of CAREER_INTENT_SIGNALS) {
+    if (signal.test(trimmed)) return true;
+  }
+
+  return false;
 };
 
 interface SimResult {
@@ -562,6 +621,7 @@ const CareerTwin: React.FC = () => {
   const [simHistory, setSimHistory] = useState<SimResult[]>([]);
   const [customInput, setCustomInput] = useState('');
   const [activeResult, setActiveResult] = useState<SimResult | null>(null);
+  const [validationError, setValidationError] = useState<string | null>(null);
 
   React.useEffect(() => {
     setProjectedReadiness(baseReadiness);
@@ -573,11 +633,21 @@ const CareerTwin: React.FC = () => {
 
   const runSimulation = (actionName: string, query?: string) => {
     if (simulating) return;
-    setSimulating(true);
+    setValidationError(null);
 
-    let ruleKey = 'general';
     const matchText = (query || actionName).toLowerCase();
 
+    // Reject irrelevant prompts before running any simulation
+    if (query && !isCareerRelevant(matchText)) {
+      setValidationError(
+        `"${actionName}" doesn't appear to be a career-relevant action. Try something like "Learn Docker", "Build an AI Agent project", or "Contribute to open source".`
+      );
+      return;
+    }
+
+    setSimulating(true);
+
+    let ruleKey: string | null = null;
     for (const key of Object.keys(SIMULATION_RULES)) {
       if (matchText.includes(key)) {
         ruleKey = key;
@@ -585,7 +655,10 @@ const CareerTwin: React.FC = () => {
       }
     }
 
-    const ruleset = SIMULATION_RULES[ruleKey] || { impact: 5, time: '2-4 Weeks', demand: 'Medium', skills: ['Domain Knowledge', 'Applied Learning'], desc: 'General learning goals steadily improve your overall competency profile.' };
+    // If career-relevant but no exact rule match, use a small generic impact
+    const ruleset = ruleKey
+      ? SIMULATION_RULES[ruleKey]
+      : { impact: 2, time: '2-4 Weeks', demand: 'Medium', skills: ['Applied Learning', 'Domain Knowledge'], desc: 'This goal builds general competency and keeps you actively engaged in your career development.' };
 
     setTimeout(() => {
       const newResult: SimResult = {
@@ -612,6 +685,7 @@ const CareerTwin: React.FC = () => {
   const handleCustomSimulate = (e: React.FormEvent) => {
     e.preventDefault();
     if (!customInput.trim()) return;
+    setValidationError(null);
     runSimulation(customInput, customInput);
   };
 
@@ -697,7 +771,7 @@ const CareerTwin: React.FC = () => {
                 type="text"
                 placeholder="What if I learn Docker?"
                 value={customInput}
-                onChange={e => setCustomInput(e.target.value)}
+                onChange={e => { setCustomInput(e.target.value); setValidationError(null); }}
                 style={{ flex: 1, padding: '12px 16px', borderRadius: 'var(--radius-sm)', border: '1px solid rgba(61,44,46,0.1)' }}
                 disabled={simulating}
               />
@@ -706,6 +780,11 @@ const CareerTwin: React.FC = () => {
                 Predict Future Impact
               </Button>
             </form>
+            {validationError && (
+              <div style={{ marginTop: 10, padding: '10px 14px', background: 'rgba(192,86,86,0.08)', border: '1px solid rgba(192,86,86,0.2)', borderRadius: 'var(--radius-sm)', color: 'var(--color-danger)', fontSize: '0.88rem', lineHeight: 1.5 }}>
+                ⚠ {validationError}
+              </div>
+            )}
           </Card>
 
         </div>

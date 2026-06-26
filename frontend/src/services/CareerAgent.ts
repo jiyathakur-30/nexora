@@ -10,8 +10,12 @@ export interface SkillMilestone {
   label: string;
 }
 
+// AnalysisResults — add the two new fields
 export interface AnalysisResults {
   readiness: number;
+  careerReadiness?: number;       // ← new (same value as readiness, explicit alias)
+  internshipReadiness?: number;   // ← new
+  jobReadiness?: number;          // ← new
   strengths: string[];
   gaps: string[];
   currentSkills: string[];
@@ -354,19 +358,27 @@ export const useCareerAgent = () => {
 // Fields not returned by Gemini are synthesized from strengths/gaps so the UI
 // never renders empty sections.
 // =============================================================================
+// normalizeAnalysis — wire the three scores
 export function normalizeAnalysis(raw: any, targetRole: string): AnalysisResults {
-  const gaps: string[]     = raw.gaps || raw.missingSkills || [];
-  const insights: string[] = raw.insights || raw.recommendations || [];
+  const gaps: string[]      = raw.gaps || raw.missingSkills || [];
+  const insights: string[]  = raw.insights || raw.recommendations || [];
   const strengths: string[] = raw.strengths || [];
-  const readiness: number   = raw.readiness ?? raw.alignmentScore ?? 0;
+
+  // Prefer the explicit careerReadiness field; fall back to legacy readiness
+  const careerReadiness: number     = raw.careerReadiness ?? raw.readiness ?? raw.alignmentScore ?? 0;
+  const internshipReadiness: number = raw.internshipReadiness ?? careerReadiness;
+  const jobReadiness: number        = raw.jobReadiness ?? careerReadiness;
 
   return {
-    readiness,
-    alignmentScore: readiness,           // alias so legacy references work
+    readiness: careerReadiness,
+    careerReadiness,
+    internshipReadiness,
+    jobReadiness,
+    alignmentScore: careerReadiness,
     strengths,
     gaps,
-    currentSkills:  raw.currentSkills  || strengths,
-    futureSkills:   raw.futureSkills   || gaps.slice(0, 3),
+    currentSkills:  raw.currentSkills || strengths,
+    futureSkills:   raw.futureSkills  || gaps.slice(0, 3),
     insights,
     milestones: raw.milestones || [
       { threshold: 80,  label: 'Intern Ready'   },
@@ -379,10 +391,10 @@ export function normalizeAnalysis(raw: any, targetRole: string): AnalysisResults
       ignore: [],
     },
     roadmap: raw.roadmap || [
-      { label: 'Current Stage',      value: targetRole,                  color: 'var(--color-primary)' },
-      { label: 'Next Milestone',     value: gaps[0] || 'Core Skills',    color: 'var(--color-warning)' },
-      { label: 'Next Career Stage',  value: `Senior ${targetRole}`,      color: 'var(--color-success)' },
-      { label: 'Long-Term Goal',     value: `Lead ${targetRole}`,        color: 'var(--color-success)' },
+      { label: 'Current Stage',     value: targetRole,               color: 'var(--color-primary)' },
+      { label: 'Next Milestone',    value: gaps[0] || 'Core Skills', color: 'var(--color-warning)' },
+      { label: 'Next Career Stage', value: `Senior ${targetRole}`,   color: 'var(--color-success)' },
+      { label: 'Long-Term Goal',    value: `Lead ${targetRole}`,     color: 'var(--color-success)' },
     ],
   };
 }
