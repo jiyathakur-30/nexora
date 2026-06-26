@@ -638,6 +638,11 @@ export const ACTION_VERBS = [
  * dynamic scoring mechanics, diminishing returns, and anti-exploit rules.
  * Exposed through a single interface, making it easily mockable or replaceable by a live LLM endpoint later.
  */
+// Escape special regex chars so keywords like 'c++' or 'c#' don't crash RegExp
+function escapeRegex(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
 export function predictCareerImpact(
   query: string,
   profile: UserProfile
@@ -647,7 +652,7 @@ export function predictCareerImpact(
   // --- LAYER 1: Intent Extraction ---
   let detectedVerb = "explore";
   for (const verb of ACTION_VERBS) {
-    if (new RegExp(`\\b${verb}\\b`, "i").test(normQuery)) {
+    if (new RegExp(`\\b${escapeRegex(verb)}\\b`, "i").test(normQuery)) {
       detectedVerb = verb;
       break;
     }
@@ -658,9 +663,13 @@ export function predictCareerImpact(
   let matchedSkills: string[] = [];
 
   for (const rule of KEYWORD_RULES) {
-    const hasMatch = rule.keywords.some((kw) =>
-      new RegExp(`\\b${kw}\\b`, "i").test(normQuery)
-    );
+    const hasMatch = rule.keywords.some((kw) => {
+      try {
+        return new RegExp(`\\b${escapeRegex(kw)}\\b`, "i").test(normQuery);
+      } catch {
+        return normQuery.includes(kw.toLowerCase());
+      }
+    });
     if (hasMatch) {
       matchedCategory = rule.category;
       matchedSkills = rule.skills;
