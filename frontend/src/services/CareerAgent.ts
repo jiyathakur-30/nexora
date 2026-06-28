@@ -85,6 +85,40 @@ export interface AgentPreferences {
   careerTimelineMonths: number;
 }
 
+// ─── Mission Progress ──────────────────────────────────────────────────────────
+// Persisted inside NexoraAgentMemory so Dashboard, AIMentor, CareerTwin, and
+// CareerMissions all share the same state without a separate context.
+export interface MissionChecklistItem {
+  id: string;
+  label: string;
+  done: boolean;
+}
+
+export interface MissionProgress {
+  /** ID of the WeeklyMission currently active on the Career Missions page */
+  activeMissionId: string | null;
+  /** ISO timestamp when the user clicked Start Mission */
+  startedAt: string | null;
+  /** Per-task checklist for the active mission */
+  checklist: MissionChecklistItem[];
+  /** IDs of all WeeklyMissions that have been fully checked off */
+  completedMissionIds: string[];
+  /** Accumulated XP from mission completions */
+  xp: number;
+  /** Career Score — starts from analysis.readiness and grows with completions */
+  careerScore: number;
+  /** Current daily streak (days in a row with at least one completed mission) */
+  streak: number;
+  /** Achievement tier label derived from XP */
+  achievement: string;
+  /** Count of completed Project-category missions */
+  portfolioProjects: number;
+  /** 7-element boolean array (Mon–Sun), true = mission completed that day */
+  weeklyActivity: boolean[];
+  /** ISO date of last activity, used to detect streak breaks */
+  lastActivityDate: string | null;
+}
+
 export interface NexoraAgentMemory {
   version: number;
   createdAt: string;
@@ -113,6 +147,9 @@ export interface NexoraAgentMemory {
   activities: ActivityLog[];
   opportunities: OpportunityMatch[];
   mentorContext: MentorContext;
+
+  // Career Missions page state — shared across Dashboard, AIMentor, CareerTwin
+  missionProgress: MissionProgress;
 
   // Preferences
   preferences: AgentPreferences;
@@ -151,6 +188,19 @@ export const createDefaultMemory = (): NexoraAgentMemory => {
     mentorContext: {
       chatHistory: []
     },
+    missionProgress: {
+      activeMissionId: null,
+      startedAt: null,
+      checklist: [],
+      completedMissionIds: [],
+      xp: 0,
+      careerScore: 0,
+      streak: 0,
+      achievement: 'Just Getting Started',
+      portfolioProjects: 0,
+      weeklyActivity: [false, false, false, false, false, false, false],
+      lastActivityDate: null,
+    },
     preferences: {
       notificationFrequency: 'daily',
       adviceLevel: 'proactive',
@@ -188,6 +238,22 @@ export const getAgentMemory = (): NexoraAgentMemory => {
         if (!parsed.suggestedMissions) parsed.suggestedMissions = [];
         if (!parsed.missionHistory) parsed.missionHistory = [];
         if (!parsed.activities) parsed.activities = [];
+        // Migration: add missionProgress if missing (existing users upgrading)
+        if (!parsed.missionProgress) {
+          parsed.missionProgress = {
+            activeMissionId: null,
+            startedAt: null,
+            checklist: [],
+            completedMissionIds: [],
+            xp: 0,
+            careerScore: parsed.analysis?.readiness ?? 0,
+            streak: 0,
+            achievement: 'Just Getting Started',
+            portfolioProjects: 0,
+            weeklyActivity: [false, false, false, false, false, false, false],
+            lastActivityDate: null,
+          };
+        }
       }
 
       // Verify schema version, run migration if version matches legacy or old schema

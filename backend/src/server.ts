@@ -4,8 +4,9 @@ import express from 'express';
 import http from 'http';
 import cors from 'cors';
 import { Server } from 'socket.io';
-import { analyzeProfile, simulateAction, getMentorAdvice } from './services/aiMockService';
-import { analyzeResumeWithAI } from "./services/geminiService";
+import { analyzeProfile, simulateAction } from './services/aiMockService';
+import { analyzeResumeWithAI, getMentorAdvice } from "./services/geminiService";
+import type { MentorRequestContext } from "./services/geminiService";
 import { fetchOpportunities } from "./services/opportunityService";
 
 import multer from "multer";
@@ -130,9 +131,42 @@ app.post('/api/simulate', async (req, res) => {
 });
 
 app.post('/api/mentor', async (req, res) => {
-  const { prompt } = req.body;
-  const result = await getMentorAdvice(prompt);
-  res.json(result);
+  try {
+    const { prompt, context } = req.body || {};
+
+    if (!prompt || typeof prompt !== 'string' || !prompt.trim()) {
+      return res.status(400).json({ error: "prompt is required" });
+    }
+
+    // Build a fully-populated context with safe defaults so a thin or
+    // outdated frontend payload never causes a generic fallback answer.
+    const mentorContext: MentorRequestContext = {
+      targetRole: context?.targetRole || 'Software Engineer',
+      readiness: context?.readiness ?? null,
+      careerReadiness: context?.careerReadiness ?? context?.readiness ?? null,
+      internshipReadiness: context?.internshipReadiness ?? null,
+      jobReadiness: context?.jobReadiness ?? null,
+      strengths: Array.isArray(context?.strengths) ? context.strengths : [],
+      gaps: Array.isArray(context?.gaps) ? context.gaps : [],
+      currentSkills: Array.isArray(context?.currentSkills) ? context.currentSkills : [],
+      futureSkills: Array.isArray(context?.futureSkills) ? context.futureSkills : [],
+      insights: Array.isArray(context?.insights) ? context.insights : [],
+      githubUsername: context?.githubUsername || null,
+      linkedinUrl: context?.linkedinUrl || null,
+      hasResume: !!context?.hasResume,
+      isTwinGenerated: !!context?.isTwinGenerated,
+      activeMissions: Array.isArray(context?.activeMissions) ? context.activeMissions : [],
+      careerTimelineMonths: context?.careerTimelineMonths ?? 12
+    };
+
+    const result = await getMentorAdvice(prompt.trim(), mentorContext);
+    res.json(result);
+  } catch (error: any) {
+    console.error("Mentor Error:", error);
+    res.status(500).json({
+      error: `Failed to get mentor advice: ${error?.message || 'unknown error'}`
+    });
+  }
 });
 
 // Opportunity hub 

@@ -7,7 +7,7 @@ import Button from '../components/ui/Button';
 import { useCareerAgent } from '../services/CareerAgent';
 import type { WeeklyMission } from '../services/CareerAgent';
 import { generateMissions, checkMissionRelevance, regenerateSingleMission, generateId } from '../services/MissionGenerator';
-import { normalizeAnalysis } from './CareerTwin';
+import { normalizeAnalysis } from '../services/CareerAgent';
 import { 
   DashboardHeader, 
   KPISection, 
