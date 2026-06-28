@@ -9,6 +9,7 @@ import OpportunityHub from './pages/OpportunityHub';
 import Settings from './pages/Settings';
 import Pulse from './pages/Pulse';
 import AppLayout from './components/layout/AppLayout';
+import CareerMissions from "./pages/CareerMissions";
 
 const App: React.FC = () => {
   useEffect(() => {
@@ -34,6 +35,7 @@ const App: React.FC = () => {
           <Route path="/pulse" element={<Pulse />} />
           <Route path="/mentor" element={<AIMentor />} />
           <Route path="/opportunity-hub" element={<OpportunityHub />} />
+          <Route path="/career-missions" element={<CareerMissions />} />
           <Route path="/settings" element={<Settings />} />
         </Route>
         

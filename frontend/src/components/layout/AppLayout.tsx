@@ -5,35 +5,35 @@ import FloatingMentor from './FloatingMentor';
 
 const Sidebar: React.FC = () => {
   return (
-    <div style={{ 
-      width: '240px', 
-      backgroundColor: 'var(--color-sidebar)', 
-      borderRight: '1px solid var(--color-border)', 
-      height: '100vh', 
-      position: 'fixed', 
-      display: 'flex', 
+    <div style={{
+      width: '240px',
+      backgroundColor: 'var(--color-sidebar)',
+      borderRight: '1px solid var(--color-border)',
+      height: '100vh',
+      position: 'fixed',
+      display: 'flex',
       flexDirection: 'column',
       zIndex: 100
     }}>
       {/* Brand logo */}
-      <div style={{ 
-        padding: 'var(--space-5) var(--space-4)', 
-        fontSize: '1.25rem', 
-        fontWeight: 800, 
-        color: 'var(--color-primary)', 
-        display: 'flex', 
-        alignItems: 'center', 
+      <div style={{
+        padding: 'var(--space-5) var(--space-4)',
+        fontSize: '1.25rem',
+        fontWeight: 800,
+        color: 'var(--color-primary)',
+        display: 'flex',
+        alignItems: 'center',
         gap: '10px',
         letterSpacing: '-0.02em'
       }}>
-        <div style={{ 
-          width: 28, 
-          height: 28, 
-          borderRadius: '7px', 
-          backgroundColor: 'var(--color-primary)', 
-          display: 'flex', 
-          alignItems: 'center', 
-          justifyContent: 'center' 
+        <div style={{
+          width: 28,
+          height: 28,
+          borderRadius: '7px',
+          backgroundColor: 'var(--color-primary)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center'
         }}>
           <Target size={16} color="white" />
         </div>
@@ -41,27 +41,28 @@ const Sidebar: React.FC = () => {
       </div>
 
       {/* Main Nav Links */}
-      <nav style={{ 
-        flex: 1, 
-        padding: 'var(--space-3) var(--space-4)', 
-        display: 'flex', 
-        flexDirection: 'column', 
-        gap: '6px' 
+      <nav style={{
+        flex: 1,
+        padding: 'var(--space-3) var(--space-4)',
+        display: 'flex',
+        flexDirection: 'column',
+        gap: '6px'
       }}>
         <SidebarLink to="/dashboard" icon={<LayoutDashboard size={18} />} label="Dashboard" />
         <SidebarLink to="/career-twin" icon={<Target size={18} />} label="Career Twin" />
         <SidebarLink to="/pulse" icon={<Activity size={18} />} label="Pulse" />
         <SidebarLink to="/mentor" icon={<MessageCircle size={18} />} label="AI Mentor" />
+        <SidebarLink to="/career-missions" icon={<Target size={18} />} label="Career Missions" />
         <SidebarLink to="/opportunity-hub" icon={<Users size={18} />} label="Opportunity Hub" />
       </nav>
 
       {/* Footer Nav Links */}
-      <div style={{ 
-        padding: 'var(--space-4)', 
-        borderTop: '1px solid var(--color-border)', 
-        display: 'flex', 
-        flexDirection: 'column', 
-        gap: '6px' 
+      <div style={{
+        padding: 'var(--space-4)',
+        borderTop: '1px solid var(--color-border)',
+        display: 'flex',
+        flexDirection: 'column',
+        gap: '6px'
       }}>
         <SidebarLink to="/settings" icon={<Settings size={18} />} label="Settings" />
       </div>
@@ -73,8 +74,8 @@ const SidebarLink: React.FC<{ to: string; icon: React.ReactNode; label: string }
   const [isHovered, setIsHovered] = useState(false);
 
   return (
-    <NavLink 
-      to={to} 
+    <NavLink
+      to={to}
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
       style={({ isActive }) => {
@@ -82,7 +83,7 @@ const SidebarLink: React.FC<{ to: string; icon: React.ReactNode; label: string }
         const hoverBg = 'rgba(201, 106, 74, 0.03)';
         const bg = isActive ? activeBg : (isHovered ? hoverBg : 'transparent');
         const color = isActive ? 'var(--color-primary)' : 'var(--color-text-light)';
-        
+
         return {
           display: 'flex',
           alignItems: 'center',

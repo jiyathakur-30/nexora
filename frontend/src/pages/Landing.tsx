@@ -31,7 +31,7 @@ const Landing: React.FC = () => {
           <motion.div initial={{ opacity: 0, x: -30 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.6 }}>
             <div style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', padding: '6px 16px', backgroundColor: 'rgba(201, 106, 74, 0.1)', color: 'var(--color-primary)', borderRadius: '20px', fontSize: '0.9rem', fontWeight: 600, marginBottom: 'var(--space-6)' }}>
               <span style={{ width: 8, height: 8, backgroundColor: 'var(--color-primary)', borderRadius: '50%' }}></span>
-              Nexora 2.0 is live
+              Nexora is live
             </div>
 
             <h1 style={{ fontSize: '4.5rem', fontWeight: 800, color: 'var(--color-text)', lineHeight: 1.1, marginBottom: 'var(--space-4)' }}>
@@ -51,15 +51,7 @@ const Landing: React.FC = () => {
               </Button>
             </div>
 
-            {/* Trust Indicators */}
-            <div style={{ display: 'flex', gap: 'var(--space-6)', marginTop: 'var(--space-8)', alignItems: 'center' }}>
-              <div style={{ display: 'flex' }}>
-                {[1, 2, 3, 4, 5].map(i => <Star key={i} size={20} fill="#FBBC05" color="#FBBC05" />)}
-              </div>
-              <div style={{ fontSize: '0.9rem', color: 'var(--color-text-light)', fontWeight: 600 }}>
-                Trusted by 10,000+ Learners
-              </div>
-            </div>
+
           </motion.div>
 
           {/* Right Visual */}

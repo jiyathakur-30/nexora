@@ -14,7 +14,13 @@ import {
   BookOpen,
   Activity,
   FileText,
-  CheckCircle2
+  CheckCircle2,
+  Zap,
+  TrendingUp,
+  AlertTriangle,
+  GraduationCap,
+  Globe,
+  Target
 } from 'lucide-react';
 import styles from './Pulse.module.css';
 import { useNavigate } from 'react-router-dom';
@@ -27,7 +33,7 @@ interface TrendCard {
   summary: string;
   whyItMatters: string;
   detailedExplanation: string;
-  whyItMattersForYouTemplate?: string; // Dynamic placeholder replaced with user role
+  whyItMattersForYouTemplate?: string;
   tags: string[];
   trendStrength: number;
   source: 'Hacker News' | 'GitHub' | 'Dev.to' | 'Reddit' | 'YouTube' | 'Nexora AI';
@@ -97,6 +103,28 @@ const ILLUSTRATIVE_EXAMPLES: TrendCard[] = [
     primarySourceLabel: 'RSC Docs'
   }
 ];
+
+// --- HELPERS for badge/chip rendering ---
+type IntentType = 'critical' | 'learning' | 'opportunity' | 'industry' | 'resource';
+
+const getIntentMeta = (id: string): { intent: IntentType; label: string; impactLabel: string } => {
+  if (id.startsWith('rec-critical-')) return { intent: 'critical', label: 'Critical', impactLabel: 'High Impact' };
+  if (id.startsWith('rec-learnnow-')) return { intent: 'learning', label: 'Learning', impactLabel: 'Recommended' };
+  if (id.startsWith('rec-opportunity-')) return { intent: 'opportunity', label: 'Opportunity', impactLabel: 'Trending' };
+  if (id.startsWith('rec-signal-')) return { intent: 'industry', label: 'Industry', impactLabel: 'Trending' };
+  if (id.startsWith('rec-resource-')) return { intent: 'resource', label: 'Learning', impactLabel: 'Recommended' };
+  return { intent: 'industry', label: 'Industry', impactLabel: 'Trending' };
+};
+
+const IntentIcon: React.FC<{ intent: IntentType; size?: number }> = ({ intent, size = 14 }) => {
+  switch (intent) {
+    case 'critical': return <AlertTriangle size={size} />;
+    case 'learning': return <GraduationCap size={size} />;
+    case 'opportunity': return <Target size={size} />;
+    case 'industry': return <Globe size={size} />;
+    case 'resource': return <BookOpen size={size} />;
+  }
+};
 
 export const Pulse: React.FC = () => {
   const { memory, updateMemory } = useCareerAgent();
@@ -400,14 +428,19 @@ export const Pulse: React.FC = () => {
   };
 
   // Helper to render a specific intent group in the feed
-  const renderFeedSection = (sectionTitle: string, items: TrendCard[]) => {
+  const renderFeedSection = (sectionTitle: string, items: TrendCard[], intent: IntentType) => {
     if (items.length === 0) return null;
     return (
-      <div className={styles.intentSection} style={{ marginBottom: 'var(--space-6)' }}>
-        <h3 style={{ fontSize: '1.2rem', fontWeight: 800, color: 'var(--color-primary)', marginBottom: 'var(--space-3)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-          {sectionTitle}
-        </h3>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
+      <div className={styles.intentSection}>
+        <div className={styles.sectionHeader}>
+          <div className={`${styles.sectionChip} ${styles[`sectionChip_${intent}`]}`}>
+            <IntentIcon intent={intent} size={12} />
+            <span>{sectionTitle}</span>
+          </div>
+          <div className={styles.sectionLine} />
+          <span className={styles.sectionCount}>{items.length}</span>
+        </div>
+        <div className={styles.sectionCards}>
           {items.map(trend => renderTrendCard(trend))}
         </div>
       </div>
@@ -417,19 +450,27 @@ export const Pulse: React.FC = () => {
   // Helper to render the opportunity section with intelligent empty state
   const renderOpportunitySection = (items: TrendCard[]) => {
     return (
-      <div className={styles.intentSection} style={{ marginBottom: 'var(--space-6)' }}>
-        <h3 style={{ fontSize: '1.2rem', fontWeight: 800, color: 'var(--color-primary)', marginBottom: 'var(--space-3)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-          Opportunities
-        </h3>
+      <div className={styles.intentSection}>
+        <div className={styles.sectionHeader}>
+          <div className={`${styles.sectionChip} ${styles.sectionChip_opportunity}`}>
+            <Target size={12} />
+            <span>Opportunities</span>
+          </div>
+          <div className={styles.sectionLine} />
+          <span className={styles.sectionCount}>{items.length}</span>
+        </div>
         {items.length > 0 ? (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
+          <div className={styles.sectionCards}>
             {items.map(trend => renderTrendCard(trend))}
           </div>
         ) : (
-          <div className={styles.emptyState} style={{ padding: 'var(--space-6)', borderStyle: 'dashed', background: 'rgba(201, 106, 74, 0.02)' }}>
-            <div className={styles.emptyTitle} style={{ fontSize: '1.1rem', fontWeight: 700 }}>No Matched Opportunities Connected</div>
-            <div className={styles.emptySubtitle} style={{ fontSize: '0.88rem', color: 'var(--color-text-light)', lineHeight: 1.4 }}>
-              We have no matching listings in memory yet. To see active matches, make sure your professional profiles (GitHub, LinkedIn) are connected in Settings so our agent can index relevant internships and repositories.
+          <div className={styles.emptyState}>
+            <div className={styles.emptyIconRing}>
+              <Target size={20} />
+            </div>
+            <div className={styles.emptyTitle}>No Matched Opportunities Yet</div>
+            <div className={styles.emptySubtitle}>
+              Connect your GitHub and LinkedIn in Settings so our agent can index relevant internships and repositories for you.
             </div>
           </div>
         )}
@@ -439,39 +480,51 @@ export const Pulse: React.FC = () => {
 
   // Helper to render a single dynamic recommendation card
   const renderTrendCard = (trend: TrendCard) => {
+    const { intent, label, impactLabel } = getIntentMeta(trend.id);
+    const isBookmarked = bookmarks.includes(trend.id);
+
     return (
       <motion.div
         key={trend.id}
         variants={itemVariants}
         layoutId={`card-container-${trend.id}`}
         onClick={() => setSelectedTrend(trend)}
-        className={styles.pulseCard}
+        className={`${styles.pulseCard} ${styles[`pulseCard_${intent}`]}`}
         style={{ cursor: 'pointer' }}
       >
-        {/* Top Row */}
+        {/* Shimmer overlay */}
+        <div className={styles.cardShimmer} />
+
+        {/* Top Row: category chip + impact badge + match score */}
         <div className={styles.cardTopRow}>
-          <div className={styles.metaGroup}>
-            <span className={styles.sourceBadge} style={{ backgroundColor: 'rgba(201, 106, 74, 0.1)', color: 'var(--color-primary)' }}>
-              Nexora Advisor
+          <div className={styles.cardChips}>
+            <span className={`${styles.categoryChip} ${styles[`categoryChip_${intent}`]}`}>
+              <IntentIcon intent={intent} size={10} />
+              {label}
             </span>
-            <span className={styles.timeText}>
-              <Clock size={12} style={{ display: 'inline-flex', marginRight: 4, verticalAlign: 'middle' }} />
-              {trend.timestamp}
+            <span className={`${styles.impactBadge} ${styles[`impactBadge_${intent}`]}`}>
+              {intent === 'critical' && <Zap size={10} />}
+              {intent === 'learning' && <TrendingUp size={10} />}
+              {(intent === 'industry' || intent === 'opportunity' || intent === 'resource') && <Sparkles size={10} />}
+              {impactLabel}
             </span>
           </div>
-          <div className={styles.scoreIndicator}>
-            <Activity size={14} />
-            <span>{trend.matchScore}% Match</span>
+          <div className={styles.matchScore}>
+            <Activity size={11} />
+            <span>{trend.matchScore}%</span>
           </div>
         </div>
 
-        {/* Title */}
-        <h2 className={styles.cardTitle}>{trend.title}</h2>
+        {/* AI Sparkle + Title row */}
+        <div className={styles.cardTitleRow}>
+          <Sparkles size={13} className={styles.aiSparkle} />
+          <h2 className={styles.cardTitle}>{trend.title}</h2>
+        </div>
 
-        {/* AI Summary */}
+        {/* Summary */}
         <p className={styles.cardSummary}>{trend.summary}</p>
 
-        {/* Footer Section */}
+        {/* Footer */}
         <div className={styles.cardFooter}>
           <div className={styles.tagsContainer}>
             {trend.tags.slice(0, 2).map((tag, idx) => (
@@ -483,14 +536,14 @@ export const Pulse: React.FC = () => {
 
           <div className={styles.actionArea}>
             <button
-              className={`${styles.actionBtn} ${bookmarks.includes(trend.id) ? styles.bookmarkedBtn : ''}`}
+              className={`${styles.actionBtn} ${isBookmarked ? styles.bookmarkedBtn : ''}`}
               onClick={(e) => toggleBookmark(e, trend.id)}
-              title={bookmarks.includes(trend.id) ? "Remove Bookmark" : "Save Signal"}
+              title={isBookmarked ? "Remove Bookmark" : "Save Signal"}
             >
-              {bookmarks.includes(trend.id) ? <BookmarkCheck size={18} /> : <Bookmark size={18} />}
+              {isBookmarked ? <BookmarkCheck size={15} /> : <Bookmark size={15} />}
             </button>
             <span className={styles.expandLink}>
-              Analyze Recommendation <ArrowRight size={14} />
+              Analyze <ArrowRight size={12} />
             </span>
           </div>
         </div>
@@ -654,21 +707,35 @@ export const Pulse: React.FC = () => {
   return (
     <div className={styles.pageContainer}>
 
-      {/* 1. Header Section - Clean Feed Header, Banners completely removed */}
+      {/* 1. Premium Feed Header */}
       <header className={styles.feedHeader}>
-        <h1 className={styles.feedTitle}>Nexora Intelligence Feed</h1>
-        <p className={styles.feedSubtitle}>
-          Personalized career intelligence for a <strong>{userRole}</strong>.
-        </p>
+        <div className={styles.feedHeaderLeft}>
+          <div className={styles.feedTitleGroup}>
+            <div className={styles.feedBadge}>
+              <Sparkles size={11} />
+              <span>AI Intelligence</span>
+            </div>
+            <h1 className={styles.feedTitle}>Nexora Pulse</h1>
+          </div>
+          <p className={styles.feedSubtitle}>
+            Personalized career intelligence for <strong>{userRole}</strong>
+          </p>
+        </div>
+        <div className={styles.feedStats}>
+          <div className={styles.statPill}>
+            <span className={styles.statDot} />
+            <span>{filteredTrends.length} signals active</span>
+          </div>
+        </div>
       </header>
 
-      {/* 2. Controls (Search only - Category tabs removed entirely) */}
-      <div className={styles.controlsRow} style={{ justifyContent: 'flex-end' }}>
-        <div className={styles.searchWrapper} style={{ maxWidth: '400px' }}>
-          <Search size={18} className={styles.searchIcon} />
+      {/* 2. Search Controls */}
+      <div className={styles.controlsRow}>
+        <div className={styles.searchWrapper}>
+          <Search size={15} className={styles.searchIcon} />
           <input
             type="text"
-            placeholder="Search recommendations, tags, or skills..."
+            placeholder="Search recommendations, skills, or tags…"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             className={styles.searchInput}
@@ -676,7 +743,7 @@ export const Pulse: React.FC = () => {
         </div>
       </div>
 
-      {/* 3. Feed List - Grouped and sorted by intent sections */}
+      {/* 3. Feed List - Grouped by intent */}
       <motion.div
         variants={listVariants}
         initial="hidden"
@@ -686,11 +753,11 @@ export const Pulse: React.FC = () => {
         <AnimatePresence mode="popLayout">
           {filteredTrends.length > 0 ? (
             <>
-              {renderFeedSection("Critical For You", filteredTrends.filter(t => t.id.startsWith('rec-critical-')))}
-              {renderFeedSection("Learn Next", filteredTrends.filter(t => t.id.startsWith('rec-learnnow-')))}
+              {renderFeedSection("Critical For You", filteredTrends.filter(t => t.id.startsWith('rec-critical-')), 'critical')}
+              {renderFeedSection("Learn Next", filteredTrends.filter(t => t.id.startsWith('rec-learnnow-')), 'learning')}
               {renderOpportunitySection(filteredTrends.filter(t => t.id.startsWith('rec-opportunity-')))}
-              {renderFeedSection("Industry Signals", filteredTrends.filter(t => t.id.startsWith('rec-signal-')))}
-              {renderFeedSection("Learning Resources", filteredTrends.filter(t => t.id.startsWith('rec-resource-')))}
+              {renderFeedSection("Industry Signals", filteredTrends.filter(t => t.id.startsWith('rec-signal-')), 'industry')}
+              {renderFeedSection("Learning Resources", filteredTrends.filter(t => t.id.startsWith('rec-resource-')), 'resource')}
             </>
           ) : (
             <motion.div
@@ -699,7 +766,10 @@ export const Pulse: React.FC = () => {
               exit={{ opacity: 0 }}
               className={styles.emptyState}
             >
-              <div className={styles.emptyTitle}>No matching recommendations found</div>
+              <div className={styles.emptyIconRing}>
+                <Search size={20} />
+              </div>
+              <div className={styles.emptyTitle}>No matching recommendations</div>
               <div className={styles.emptySubtitle}>Try adjusting your search query to find specific advisor signals.</div>
             </motion.div>
           )}
@@ -708,138 +778,142 @@ export const Pulse: React.FC = () => {
 
       {/* 4. Expandable Overlay Modal */}
       <AnimatePresence>
-        {selectedTrend && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className={styles.modalOverlay}
-            onClick={() => setSelectedTrend(null)}
-          >
+        {selectedTrend && (() => {
+          const { intent } = getIntentMeta(selectedTrend.id);
+          return (
             <motion.div
-              layoutId={`card-container-${selectedTrend.id}`}
-              className={styles.modalContent}
-              onClick={(e) => e.stopPropagation()}
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className={styles.modalOverlay}
+              onClick={() => setSelectedTrend(null)}
             >
-              {/* Close Button */}
-              <button
-                className={styles.closeBtn}
-                onClick={() => setSelectedTrend(null)}
+              <motion.div
+                layoutId={`card-container-${selectedTrend.id}`}
+                className={styles.modalContent}
+                onClick={(e) => e.stopPropagation()}
               >
-                <X size={20} />
-              </button>
+                {/* Close Button */}
+                <button
+                  className={styles.closeBtn}
+                  onClick={() => setSelectedTrend(null)}
+                >
+                  <X size={20} />
+                </button>
 
-              {/* Header */}
-              <div className={styles.modalCategoryHeader}>
-                <span className={styles.sourceBadge} style={{ backgroundColor: 'rgba(201, 106, 74, 0.1)', color: 'var(--color-primary)' }}>
-                  Nexora Advisor
-                </span>
-                <span className={styles.timeText}>{selectedTrend.timestamp}</span>
-                {isTwinGenerated && (
-                  <>
-                    <div className={styles.divider} />
-                    <span className={styles.timeText} style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                      <Activity size={12} color="var(--color-primary)" />
-                      <strong>{selectedTrend.matchScore}% Match Score</strong>
-                    </span>
-                  </>
-                )}
-              </div>
-
-              {/* Title */}
-              <h2 className={styles.modalTitle}>{selectedTrend.title}</h2>
-
-              {/* Tags */}
-              <div className={styles.modalTags}>
-                {selectedTrend.tags.map((tag, idx) => (
-                  <span key={idx} className={styles.tagBadge} style={{ padding: '6px 12px', fontSize: '0.8rem' }}>
-                    {tag}
+                {/* Modal Header */}
+                <div className={styles.modalCategoryHeader}>
+                  <span className={`${styles.categoryChip} ${styles[`categoryChip_${intent}`]}`} style={{ padding: '4px 10px', fontSize: '0.75rem' }}>
+                    <IntentIcon intent={intent} size={11} />
+                    {getIntentMeta(selectedTrend.id).label}
                   </span>
-                ))}
-                <span className={styles.tagBadge} style={{ padding: '6px 12px', fontSize: '0.8rem', backgroundColor: 'rgba(201, 106, 74, 0.1)', color: 'var(--color-primary)' }}>
-                  ⚡ Impact Score: {selectedTrend.trendStrength}%
-                </span>
-              </div>
-
-              {/* Overview Section */}
-              <div className={styles.modalSection}>
-                <div className={styles.modalSectionTitle}>
-                  <BookOpen size={16} />
-                  <span>Overview</span>
+                  <span className={styles.timeText}>{selectedTrend.timestamp}</span>
+                  {isTwinGenerated && (
+                    <>
+                      <div className={styles.divider} />
+                      <span className={styles.timeText} style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                        <Activity size={12} color="var(--color-primary)" />
+                        <strong>{selectedTrend.matchScore}% Match</strong>
+                      </span>
+                    </>
+                  )}
                 </div>
-                <p className={styles.modalText}>{selectedTrend.summary}</p>
-              </div>
 
-              {/* Why This Matters */}
-              <div className={styles.modalSection}>
-                <div className={styles.modalSectionTitle}>
-                  <Sparkles size={16} />
-                  <span>Why This Matters</span>
+                {/* Title */}
+                <h2 className={styles.modalTitle}>{selectedTrend.title}</h2>
+
+                {/* Tags */}
+                <div className={styles.modalTags}>
+                  {selectedTrend.tags.map((tag, idx) => (
+                    <span key={idx} className={styles.tagBadge} style={{ padding: '6px 12px', fontSize: '0.8rem' }}>
+                      {tag}
+                    </span>
+                  ))}
+                  <span className={styles.tagBadge} style={{ padding: '6px 12px', fontSize: '0.8rem', backgroundColor: 'rgba(201, 106, 74, 0.1)', color: 'var(--color-primary)' }}>
+                    ⚡ Impact Score: {selectedTrend.trendStrength}%
+                  </span>
                 </div>
-                <p className={styles.modalText}>{selectedTrend.whyItMatters}</p>
-              </div>
 
-              {/* Why It Was Selected */}
-              {selectedTrend.whySelected && (
+                {/* Overview Section */}
                 <div className={styles.modalSection}>
                   <div className={styles.modalSectionTitle}>
-                    <Activity size={16} />
-                    <span>Why It Was Selected</span>
+                    <BookOpen size={16} />
+                    <span>Overview</span>
                   </div>
-                  <p className={styles.modalText}>{selectedTrend.whySelected}</p>
+                  <p className={styles.modalText}>{selectedTrend.summary}</p>
                 </div>
-              )}
 
-              {/* Recommended Action */}
-              {selectedTrend.recommendedAction && (
-                <div className={styles.modalSection} style={{ backgroundColor: 'rgba(201, 106, 74, 0.04)', padding: 'var(--space-4)', borderRadius: 'var(--radius-sm)', borderLeft: '3px solid var(--color-primary)' }}>
+                {/* Why This Matters */}
+                <div className={styles.modalSection}>
                   <div className={styles.modalSectionTitle}>
-                    <CheckCircle2 size={16} style={{ color: 'var(--color-primary)' }} />
-                    <span style={{ color: 'var(--color-primary)' }}>Recommended Action</span>
+                    <Sparkles size={16} />
+                    <span>Why This Matters</span>
                   </div>
-                  <p className={styles.modalText} style={{ fontWeight: 600, color: 'var(--color-text)' }}>{selectedTrend.recommendedAction}</p>
+                  <p className={styles.modalText}>{selectedTrend.whyItMatters}</p>
                 </div>
-              )}
 
-              {/* Action Footer */}
-              <div className={styles.modalFooter}>
-                <button
-                  onClick={() => {
-                    if (selectedTrend.primarySourceUrl) {
-                      window.open(selectedTrend.primarySourceUrl, '_blank');
-                    }
-                  }}
-                  disabled={!selectedTrend.primarySourceUrl}
-                  style={{
-                    backgroundColor: selectedTrend.primarySourceUrl ? 'var(--color-primary)' : 'var(--color-text-light)',
-                    opacity: selectedTrend.primarySourceUrl ? 1 : 0.5,
-                    color: 'white',
-                    padding: '12px 24px',
-                    borderRadius: 'var(--radius-sm)',
-                    fontWeight: 700,
-                    fontSize: '0.95rem',
-                    cursor: selectedTrend.primarySourceUrl ? 'pointer' : 'not-allowed',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 8,
-                    boxShadow: selectedTrend.primarySourceUrl ? '0 4px 14px 0 rgba(201, 106, 74, 0.39)' : 'none',
-                    transition: 'all 0.2s'
-                  }}
-                  className={styles.modalActionBtn}
-                >
-                  {selectedTrend.primarySourceUrl ? (
-                    <>
-                      {selectedTrend.primarySourceLabel || 'Visit Primary Source'} <ExternalLink size={16} />
-                    </>
-                  ) : (
-                    'No source available'
-                  )}
-                </button>
-              </div>
+                {/* Why It Was Selected */}
+                {selectedTrend.whySelected && (
+                  <div className={styles.modalSection}>
+                    <div className={styles.modalSectionTitle}>
+                      <Activity size={16} />
+                      <span>Why It Was Selected</span>
+                    </div>
+                    <p className={styles.modalText}>{selectedTrend.whySelected}</p>
+                  </div>
+                )}
 
+                {/* Recommended Action */}
+                {selectedTrend.recommendedAction && (
+                  <div className={styles.modalSection} style={{ backgroundColor: 'rgba(201, 106, 74, 0.04)', padding: 'var(--space-4)', borderRadius: 'var(--radius-sm)', borderLeft: '3px solid var(--color-primary)' }}>
+                    <div className={styles.modalSectionTitle}>
+                      <CheckCircle2 size={16} style={{ color: 'var(--color-primary)' }} />
+                      <span style={{ color: 'var(--color-primary)' }}>Recommended Action</span>
+                    </div>
+                    <p className={styles.modalText} style={{ fontWeight: 600, color: 'var(--color-text)' }}>{selectedTrend.recommendedAction}</p>
+                  </div>
+                )}
+
+                {/* Action Footer */}
+                <div className={styles.modalFooter}>
+                  <button
+                    onClick={() => {
+                      if (selectedTrend.primarySourceUrl) {
+                        window.open(selectedTrend.primarySourceUrl, '_blank');
+                      }
+                    }}
+                    disabled={!selectedTrend.primarySourceUrl}
+                    style={{
+                      backgroundColor: selectedTrend.primarySourceUrl ? 'var(--color-primary)' : 'var(--color-text-light)',
+                      opacity: selectedTrend.primarySourceUrl ? 1 : 0.5,
+                      color: 'white',
+                      padding: '12px 24px',
+                      borderRadius: 'var(--radius-sm)',
+                      fontWeight: 700,
+                      fontSize: '0.95rem',
+                      cursor: selectedTrend.primarySourceUrl ? 'pointer' : 'not-allowed',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 8,
+                      boxShadow: selectedTrend.primarySourceUrl ? '0 4px 14px 0 rgba(201, 106, 74, 0.39)' : 'none',
+                      transition: 'all 0.2s'
+                    }}
+                    className={styles.modalActionBtn}
+                  >
+                    {selectedTrend.primarySourceUrl ? (
+                      <>
+                        {selectedTrend.primarySourceLabel || 'Visit Primary Source'} <ExternalLink size={16} />
+                      </>
+                    ) : (
+                      'No source available'
+                    )}
+                  </button>
+                </div>
+
+              </motion.div>
             </motion.div>
-          </motion.div>
-        )}
+          );
+        })()}
       </AnimatePresence>
 
     </div>

@@ -6,6 +6,7 @@ import cors from 'cors';
 import { Server } from 'socket.io';
 import { analyzeProfile, simulateAction, getMentorAdvice } from './services/aiMockService';
 import { analyzeResumeWithAI } from "./services/geminiService";
+import { fetchOpportunities } from "./services/opportunityService";
 
 import multer from "multer";
 const pdfParse = require("pdf-parse");
@@ -134,26 +135,43 @@ app.post('/api/mentor', async (req, res) => {
   res.json(result);
 });
 
-// Mock Data endpoints for Opportunity Hub
-app.get('/api/opportunities', (req, res) => {
-  res.json({
-    similarPeople: [
-      { id: 1, name: 'Aman', sharedSkills: ['React', 'AI'], matchScore: 89, goal: 'AI Engineer' },
-      { id: 2, name: 'Priya', sharedSkills: ['Python', 'System Design'], matchScore: 82, goal: 'Backend Developer' }
-    ],
-    communities: [
-      { id: 1, name: 'AI Builders', description: 'Exploring LLMs and Agents', members: 1200 },
-      { id: 2, name: 'React Circle', description: 'Advanced UI/UX discussions', members: 850 }
-    ],
-    teams: [
-      { id: 1, name: 'VisionAI', needs: 'Frontend Developer', matchScore: 92 },
-      { id: 2, name: 'HackData', needs: 'Data Scientist', matchScore: 78 }
-    ],
-    mentors: [
-      { id: 1, name: 'Sarah Chen', expertise: 'Senior AI Engineer at TechCorp', matchScore: 95, availability: 'Available' },
-      { id: 2, name: 'Raj Patel', expertise: 'Staff Frontend Engineer', matchScore: 88, availability: 'Busy' }
-    ]
-  });
+// Opportunity hub 
+
+app.post('/api/opportunities', async (req, res) => {
+  try {
+    const {
+      careerGoal,
+      skills,
+      experience,
+      resumeSummary,
+      github,
+      linkedin
+    } = req.body || {};
+
+    if (!careerGoal || !Array.isArray(skills)) {
+      return res.status(400).json({
+        error: "careerGoal and skills are required."
+      });
+    }
+
+    const result = await fetchOpportunities({
+      careerGoal,
+      skills,
+      experience: experience || "",
+      resumeSummary: resumeSummary || "",
+      github: github || "",
+      linkedin: linkedin || ""
+    });
+console.log("SERVER RETURNING:");
+console.log(JSON.stringify(result, null, 2));
+    res.json(result);
+
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({
+      error: "Failed to fetch opportunities"
+    });
+  }
 });
 
 // Socket.io Realtime Chat

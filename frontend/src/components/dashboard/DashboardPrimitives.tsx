@@ -21,7 +21,14 @@ export const Card: React.FC<CardProps> = ({
   return (
     <div 
       className={cardClassName} 
-      style={{ padding, ...style }} 
+    style={{
+  padding,
+  background: '#FCF8F4',
+  border: '1px solid rgba(214,106,67,0.10)',
+  borderRadius: '20px',
+  boxShadow: '0 10px 30px rgba(0,0,0,0.05)',
+  ...style
+}}
       {...props}
     >
       {children}
@@ -171,7 +178,7 @@ export const ActionCard: React.FC<ActionCardProps> = ({
             alignItems: 'center',
             gap: '6px',
             transition: 'background-color var(--transition-fast)',
-            color: '#FFFFFF'
+           // color: '#FFFFFF'
           }}
           onMouseOver={e => e.currentTarget.style.backgroundColor = 'var(--color-primary-hover)'}
           onMouseOut={e => e.currentTarget.style.backgroundColor = 'var(--color-primary)'}

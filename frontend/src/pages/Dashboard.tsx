@@ -802,8 +802,18 @@ updateMemory(prev => {
     );
   }
 
-  return (
-    <div className="container page-enter-active" style={{ paddingTop: 'var(--space-6)', paddingBottom: 'var(--space-8)' }}>
+ 
+    return (
+  <div
+    className="container page-enter-active"
+    style={{
+      maxWidth: "1600px",
+      margin: "0 auto",
+      paddingInline: "32px",
+      paddingTop: "var(--space-6)",
+      paddingBottom: "var(--space-8)"
+    }}
+  >
       {/* Hidden file input for header CTA action */}
       <input 
         type="file" 
@@ -832,8 +842,15 @@ updateMemory(prev => {
       />
 
       {/* 4. Asymmetric split grid */}
-      <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 'var(--space-5)', alignItems: 'stretch' }}>
-        
+     <div
+  style={{
+    display: 'grid',
+    gridTemplateColumns: 'minmax(0, 2fr) minmax(320px, 1fr)',
+    gap: 'var(--space-5)',
+    alignItems: 'start',
+    width: '100%'
+  }}
+>
         {/* Left column (2/3 width) */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-5)' }}>
           {/* AI Coach Card */}
